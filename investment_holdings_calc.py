@@ -187,7 +187,7 @@ def dense_priced_holdings_in_window(
         current_date = pd.Timestamp(current_date)
 
         for start, end, key in ticker_windows.get(ticker, []):
-            if start <= date <= end:
+            if start <= current_date <= end:
                 df = loaded_data[key]
                 price = df[column].asof(
                     current_date
