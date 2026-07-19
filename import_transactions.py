@@ -9,6 +9,13 @@ from decimal import Decimal
 
 
 class NormalizedRow:
+    """One broker transaction with bank-agnostic field names.
+
+    cash_balance is None when the row carries no balance (corporate-action
+    rows like split distributions leave it blank); 0 means an actual zero
+    balance. amount/quantity/price default to 0 when blank.
+    """
+
     def __init__(self, date, action, symbol, amount, quantity, cash_balance, price):
         self.date = date
         self.action = action
@@ -96,6 +103,17 @@ def get_idempotent_key(row, bank, account_name):
 DATE_MAPPING = {"fidelity": "%m/%d/%Y"}
 
 
+def _decimal(value, default=None):
+    """Decimal from a CSV cell, or `default` when the cell is blank.
+
+    Corporate-action rows (split distributions, reverse splits) leave most
+    money columns empty, so blank must not be an error — and for balances it
+    must stay distinguishable from an actual 0.
+    """
+    value = (value or "").strip()
+    return Decimal(value) if value else default
+
+
 def normalize_row(bank, row):
     mapping = column_mapping.get(bank.lower())
     if not mapping:
@@ -110,10 +128,10 @@ def normalize_row(bank, row):
         date=parsed_date,
         action=row.get(mapping["action"]),
         symbol=row.get(mapping["symbol"]),
-        amount=Decimal(row.get(mapping["amount"])),
-        quantity=Decimal(row.get(mapping["quantity"])),
-        cash_balance=Decimal(row.get(mapping["cash_balance"])),
-        price=Decimal(row.get(mapping["price"]) or 0),
+        amount=_decimal(row.get(mapping["amount"]), Decimal(0)),
+        quantity=_decimal(row.get(mapping["quantity"]), Decimal(0)),
+        cash_balance=_decimal(row.get(mapping["cash_balance"])),
+        price=_decimal(row.get(mapping["price"]), Decimal(0)),
     )
 
     return normalized_row

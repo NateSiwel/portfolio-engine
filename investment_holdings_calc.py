@@ -29,10 +29,13 @@ def get_investment_holdings_calendar(
 
         date_obj = date_dict.setdefault(date_str, running_dict.copy())
 
-        # Every row's Cash Balance reflects cash after that transaction
-        # (buys/sells included), so keep CASH current on every row.
-        date_obj["CASH"] = row.cash_balance
-        running_dict["CASH"] = row.cash_balance
+        # A row's Cash Balance reflects cash after that transaction
+        # (buys/sells included), so keep CASH current on every row that has
+        # one. Corporate-action rows (split distributions) leave it blank —
+        # None — and must not touch CASH.
+        if row.cash_balance is not None:
+            date_obj["CASH"] = row.cash_balance
+            running_dict["CASH"] = row.cash_balance
 
         if symbol == "CASH":
             continue
