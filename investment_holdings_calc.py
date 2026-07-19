@@ -153,12 +153,13 @@ def dense_priced_holdings_in_window(
 
 
 def _load_benchmark_closes(ticker: str, start: date, end: date) -> pd.Series:
-    """Daily Close series for a benchmark ticker, from the shared price cache.
+    """Daily Adj Close series for a benchmark ticker, from the price cache.
 
-    Starts a week early so `asof` has a price even when the window opens on a
-    weekend or holiday.
+    Adj Close so the benchmark is total return (dividends reinvested),
+    matching the portfolio side of compare_to_market. Starts a week early so
+    `asof` has a price even when the window opens on a weekend or holiday.
     """
-    return get_history(ticker, start - timedelta(days=7), end)["Close"]
+    return get_history(ticker, start - timedelta(days=7), end)["Adj Close"]
 
 
 def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):
@@ -168,8 +169,13 @@ def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):
     a list of (date, {"CASH": Decimal, ticker: (qty, price, value), ...}).
 
     Each day's portfolio return is the previous day's asset weights times each
-    asset's price change, so cash contributions and trades only reshuffle the
+    asset's total return, so cash contributions and trades only reshuffle the
     weights — they never count as gain or loss. CASH earns 0%.
+
+    Weights come from actual (raw-price) position values; each asset's return
+    comes from Adj Close, so dividends count as gain and a stock split — a
+    10x jump in shares with a 10x drop in raw price — nets to zero instead of
+    registering as a -90% day.
 
     Returns (dates, portfolio_curve, benchmark_curve): cumulative growth
     factors starting at 1.0, aligned to `dates`.
@@ -187,7 +193,7 @@ def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):
     dates = [snaps[0][0]]
     portfolio_curve = [1.0]
     growth = 1.0
-    for (_, prev), (cur_date, cur) in zip(snaps, snaps[1:]):
+    for (prev_date, prev), (cur_date, cur) in zip(snaps, snaps[1:]):
         prev_total = total_value(prev)
         day_return = 0.0
         if prev_total > 0:
@@ -198,9 +204,10 @@ def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):
                 # A symbol missing from `cur` was sold today; without a price
                 # for it today, count its final day as 0%.
                 if symbol in cur and prev_price:
-                    cur_price = cur[symbol][1]
+                    prev_adj = get_price(symbol, prev_date, column="Adj Close")
+                    cur_adj = get_price(symbol, cur_date, column="Adj Close")
                     weight = float(value / prev_total)
-                    day_return += weight * (float(cur_price / prev_price) - 1.0)
+                    day_return += weight * (cur_adj / prev_adj - 1.0)
         growth *= 1.0 + day_return
         dates.append(cur_date)
         portfolio_curve.append(growth)
@@ -216,7 +223,10 @@ def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):
 
     port_return = (portfolio_curve[-1] - 1) * 100
     bench_return = (benchmark_curve[-1] - 1) * 100
-    print(f"\nTime-weighted return {dates[0]} -> {dates[-1]} (contributions excluded):")
+    print(
+        f"\nTime-weighted total return {dates[0]} -> {dates[-1]}"
+        " (dividends included, contributions excluded):"
+    )
     print(f"  Portfolio:        {port_return:+.2f}%")
     print(f"  {benchmark_ticker:<16}  {bench_return:+.2f}%")
     print(f"  vs benchmark:     {port_return - bench_return:+.2f} pts")
