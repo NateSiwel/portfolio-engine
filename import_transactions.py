@@ -103,7 +103,7 @@ def normalize_row(bank, row):
         raise ValueError(f"No column mapping defined for bank '{bank}'")
 
     # parse date into date object
-    parsed_date = datetime.strptime(row.get(mapping["date"]), DATE_MAPPING[bank]).date()
+    parsed_date = datetime.strptime(row.get(mapping["date"]), DATE_MAPPING[bank.lower()]).date()
 
     normalized_row = NormalizedRow(
         date=parsed_date,
@@ -119,12 +119,11 @@ def normalize_row(bank, row):
 
 
 def import_csv(folder_path) -> list[NormalizedRow]:
-    bank = folder_path.split(os.sep)[-2]
-    account_name = folder_path.split(os.sep)[-1]
-
     from pathlib import Path
 
-    folder_path = Path(folder_path)
+    folder_path = Path(str(folder_path).replace("\\\\", "/"))
+    bank = folder_path.parts[-2]
+    account_name = folder_path.parts[-1]
 
     seen = set()
     normalized_rows = []
@@ -141,7 +140,7 @@ def import_csv(folder_path) -> list[NormalizedRow]:
         raise ValueError(f"No column mapping defined for bank '{bank}'")
     all_rows.sort(
         key=lambda x: datetime.strptime(
-            x.get(mapping["date"]), DATE_MAPPING[bank]
+            x.get(mapping["date"]), DATE_MAPPING[bank.lower()]
         ).date()
     )
     for row in all_rows:

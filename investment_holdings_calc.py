@@ -43,7 +43,7 @@ def _fetch_close_prices(ticker: str, start: date, end: date) -> dict:
 
 def get_investment_holdings_calendar(
     normalized_rows: list[NormalizedRow],
-) -> dict[str, dict[str, Decimal]]:
+) -> dict[date, dict[str, Decimal]]:
 
     date_dict = {}
     running_dict = {}
@@ -139,8 +139,8 @@ def dense_priced_holdings_in_window(
                             search_dict[symbol][-1][0],
                             current_date,
                         )
-                        break
-                    print("Something is very wrong!")
+                    else:
+                        print("Something is very wrong!")
 
         result.append((current_date, current_holdings))
         current_date += timedelta(days=1)
@@ -160,9 +160,13 @@ def dense_priced_holdings_in_window(
             if not os.path.exists(file_path):
                 print(f"Downloading {ticker}...")
                 df = yf.download(
-                    ticker, start=start, end=end, interval="1d", multi_level_index=False
+                    ticker,
+                    start=start,
+                    end=end + timedelta(days=1),  # yfinance `end` is exclusive
+                    interval="1d",
+                    multi_level_index=False,
                 )
-                if df is None:
+                if df is None or df.empty:
                     print(
                         f"Failed to download data for {ticker} from {start} to {end}."
                     )

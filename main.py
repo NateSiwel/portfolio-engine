@@ -10,7 +10,7 @@ from investment_holdings_calc import (
 
 
 def main():
-    normalized_rows = import_csv(".\\csvs\\fidelity\\roth")
+    normalized_rows = import_csv("csvs/fidelity/roth")
     holdings_calendar = get_investment_holdings_calendar(normalized_rows)
 
     dates = sorted(holdings_calendar.keys())
