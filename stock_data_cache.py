@@ -62,21 +62,32 @@ def _set_frame(ticker: str, df: pd.DataFrame) -> None:
 
 
 def _download(ticker: str, start: date, end: date) -> pd.DataFrame:
-    """Daily bars for [start, end] (inclusive) from yfinance."""
+    """Daily bars for [start, end] (inclusive) from yfinance.
+
+    Empty means Yahoo answered that no bars exist in the range (weekend or
+    holiday gap, pre-IPO, delisted). Failed requests raise instead, so a
+    network hiccup is never mistaken for an empty range.
+    """
     # Imported lazily: loading yfinance costs ~0.3s, and fully cached runs
     # never need it.
     import yfinance as yf
+    from yfinance.exceptions import YFPricesMissingError, YFTzMissingError
+
+    yf.config.debug.hide_exceptions = False
 
     print(f"Downloading {ticker} {start}..{end}...")
-    df = yf.download(
-        ticker,
-        start=start,
-        end=end + timedelta(days=1),  # yfinance `end` is exclusive
-        interval="1d",
-        multi_level_index=False,
-        progress=False,
-    )
-    return pd.DataFrame() if df is None else df
+    try:
+        df = yf.Ticker(ticker).history(
+            start=start,
+            end=end + timedelta(days=1),  # yfinance `end` is exclusive
+            interval="1d",
+            actions=False,
+        )
+    except (YFPricesMissingError, YFTzMissingError):
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+    return df.tz_localize(None)
 
 
 def _read_meta(ticker: str) -> tuple[date, date] | None:
