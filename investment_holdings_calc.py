@@ -3,42 +3,11 @@ from stock_data_cache import get_history, get_price
 import pandas as pd
 
 from datetime import date, timedelta
-import math
 from typing import cast
 from decimal import Decimal
 import bisect
 
 CASH_SYMBOLS = {"SPAXX", "FDRXX", "SWVXX", "SWVYX", "SWVZX"}
-
-
-def _fetch_close_prices(ticker: str, start: date, end: date) -> dict:
-    """Daily close prices for one ticker over [start, end] from yfinance.
-
-    Returns {date: Decimal(close)} for trading days only. Network/lookup failures
-    return {} so the caller can fall back rather than abort the whole backfill.
-    """
-    import yfinance as yf
-
-    try:
-        # yfinance's `end` is exclusive, so push it out a day to include `end`.
-        data = yf.Ticker(ticker).history(
-            start=start.isoformat(),
-            end=(end + timedelta(days=1)).isoformat(),
-            auto_adjust=False,
-        )
-    except Exception as e:
-        print(f"  yfinance fetch failed for {ticker}: {e}")
-        return {}
-
-    if data is None or data.empty or "Close" not in data:
-        return {}
-
-    prices = {}
-    for ts, close in data["Close"].items():
-        if close is None or (isinstance(close, float) and math.isnan(close)):
-            continue
-        prices[cast(pd.Timestamp, ts).date()] = Decimal(str(round(float(close), 6)))
-    return prices
 
 
 def get_investment_holdings_calendar(
@@ -60,10 +29,20 @@ def get_investment_holdings_calendar(
 
         date_obj = date_dict.setdefault(date_str, running_dict.copy())
 
-        # Every row's Cash Balance reflects cash after that transaction
-        # (buys/sells included), so keep CASH current on every row.
-        date_obj["CASH"] = row.cash_balance
-        running_dict["CASH"] = row.cash_balance
+        # A row's Cash Balance reflects cash after that transaction
+        # (buys/sells included), so keep CASH current on every row that has
+        # one. Rows without a balance either carry a signed cash amount
+        # (banks with no running-balance column) or are pure share moves
+        # like split distributions, which must not touch CASH.
+        if row.cash_balance is not None:
+            new_cash = row.cash_balance
+        elif row.amount:
+            new_cash = running_dict.get("CASH", Decimal(0)) + row.amount
+        else:
+            new_cash = None
+        if new_cash is not None:
+            date_obj["CASH"] = new_cash
+            running_dict["CASH"] = new_cash
 
         if symbol == "CASH":
             continue
@@ -173,13 +152,107 @@ def dense_priced_holdings_in_window(
     return result
 
 
-def _load_benchmark_closes(ticker: str, start: date, end: date) -> pd.Series:
-    """Daily Close series for a benchmark ticker, from the shared price cache.
+def audit_splits(
+    holdings_calendar: dict[date, dict[str, Decimal]],
+    sorted_dates: list[date],
+    end: date,
+    tolerance_days: int = 8,
+    threshold: float = 0.2,
+):
+    """Cross-check ledger share counts against market split events.
 
-    Starts a week early so `asof` has a price even when the window opens on a
-    weekend or holiday.
+    For every split a held ticker underwent (per the price cache's Stock
+    Splits column), the ledger's share count must jump by roughly the same
+    ratio — brokers deliver splits as ordinary quantity rows, so a missing
+    jump means the bank reported the split in a format the adapter didn't
+    recognize (or the export omitted it), and every valuation after that
+    date is off by the ratio.
+
+    The broker's split row can land a few days after the effective date and
+    ordinary trades nearby also move the count, so the ledger passes if ANY
+    snapshot within tolerance_days after the split shows roughly the split's
+    jump relative to the count before it. Trades in the window can still
+    distort the ratio, so treat a warning as a pointer, not a verdict.
+    Returns a list of (symbol, split_date, market_ratio, ledger_ratio, ok)
+    events, where ledger_ratio is the candidate closest to the market's.
     """
-    return get_history(ticker, start - timedelta(days=7), end)["Close"]
+    events = []
+    symbols = sorted({s for h in holdings_calendar.values() for s in h if s != "CASH"})
+    for symbol in symbols:
+        held_dates = [d for d in sorted_dates if holdings_calendar[d].get(symbol)]
+        if not held_dates:
+            continue
+        first_held = held_dates[0]
+        # Snapshots carry held symbols forward, so the symbol is still held
+        # iff it appears in the final snapshot; otherwise its span ends at
+        # its last nonzero date (padded so a split on the sell-out day with
+        # a late-posting broker row is still checked).
+        if holdings_calendar[sorted_dates[-1]].get(symbol):
+            last_held = end
+        else:
+            last_held = held_dates[-1] + timedelta(days=tolerance_days)
+        try:
+            hist = get_history(symbol, first_held, min(last_held, end, date.today()))
+        except ValueError:
+            continue  # no market data; pricing already surfaces this
+        if "Stock Splits" not in hist.columns:
+            continue
+        splits = hist["Stock Splits"]
+        for ts, ratio in splits[splits != 0].items():
+            split_day = cast(pd.Timestamp, ts).date()
+            before = (
+                holdings_on_date(
+                    split_day - timedelta(days=tolerance_days),
+                    holdings_calendar,
+                    sorted_dates,
+                )
+                or {}
+            )
+            qty_before = before.get(symbol) or Decimal(0)
+            if not qty_before:
+                continue  # not held when it split
+            window_end = split_day + timedelta(days=tolerance_days)
+            candidates = [
+                holdings_calendar[d].get(symbol) or Decimal(0)
+                for d in sorted_dates
+                if split_day <= d <= window_end
+            ]
+            after = holdings_on_date(window_end, holdings_calendar, sorted_dates) or {}
+            candidates.append(after.get(symbol) or Decimal(0))
+            market_ratio = float(ratio)
+            ledger_ratio = min(
+                (float(q / qty_before) for q in candidates),
+                key=lambda r: abs(r - market_ratio),
+            )
+            ok = abs(ledger_ratio - market_ratio) <= market_ratio * threshold
+            events.append((symbol, split_day, market_ratio, ledger_ratio, ok))
+            if not ok:
+                print(
+                    f"WARNING: {symbol} split {ratio:g}:1 on {split_day} but the"
+                    f" ledger's share count (x{qty_before} before) never jumped"
+                    f" accordingly (closest: x{ledger_ratio:.2f}); a split row"
+                    f" probably failed to import — valuations after"
+                    f" {split_day} are suspect."
+                )
+    verified = sum(1 for e in events if e[4])
+    if events:
+        print(
+            f"Split audit: {verified} split(s) verified,"
+            f" {len(events) - verified} problem(s)."
+        )
+    else:
+        print("Split audit: no splits during holding periods.")
+    return events
+
+
+def _load_benchmark_closes(ticker: str, start: date, end: date) -> pd.Series:
+    """Daily Adj Close series for a benchmark ticker, from the price cache.
+
+    Adj Close so the benchmark is total return (dividends reinvested),
+    matching the portfolio side of compare_to_market. Starts a week early so
+    `asof` has a price even when the window opens on a weekend or holiday.
+    """
+    return get_history(ticker, start - timedelta(days=7), end)["Adj Close"]
 
 
 def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):
@@ -189,8 +262,13 @@ def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):
     a list of (date, {"CASH": Decimal, ticker: (qty, price, value), ...}).
 
     Each day's portfolio return is the previous day's asset weights times each
-    asset's price change, so cash contributions and trades only reshuffle the
+    asset's total return, so cash contributions and trades only reshuffle the
     weights — they never count as gain or loss. CASH earns 0%.
+
+    Weights come from actual (raw-price) position values; each asset's return
+    comes from Adj Close, so dividends count as gain and a stock split — a
+    10x jump in shares with a 10x drop in raw price — nets to zero instead of
+    registering as a -90% day.
 
     Returns (dates, portfolio_curve, benchmark_curve): cumulative growth
     factors starting at 1.0, aligned to `dates`.
@@ -208,7 +286,7 @@ def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):
     dates = [snaps[0][0]]
     portfolio_curve = [1.0]
     growth = 1.0
-    for (_, prev), (cur_date, cur) in zip(snaps, snaps[1:]):
+    for (prev_date, prev), (cur_date, cur) in zip(snaps, snaps[1:]):
         prev_total = total_value(prev)
         day_return = 0.0
         if prev_total > 0:
@@ -219,9 +297,10 @@ def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):
                 # A symbol missing from `cur` was sold today; without a price
                 # for it today, count its final day as 0%.
                 if symbol in cur and prev_price:
-                    cur_price = cur[symbol][1]
+                    prev_adj = get_price(symbol, prev_date, column="Adj Close")
+                    cur_adj = get_price(symbol, cur_date, column="Adj Close")
                     weight = float(value / prev_total)
-                    day_return += weight * (float(cur_price / prev_price) - 1.0)
+                    day_return += weight * (cur_adj / prev_adj - 1.0)
         growth *= 1.0 + day_return
         dates.append(cur_date)
         portfolio_curve.append(growth)
@@ -237,7 +316,10 @@ def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):
 
     port_return = (portfolio_curve[-1] - 1) * 100
     bench_return = (benchmark_curve[-1] - 1) * 100
-    print(f"\nTime-weighted return {dates[0]} -> {dates[-1]} (contributions excluded):")
+    print(
+        f"\nTime-weighted total return {dates[0]} -> {dates[-1]}"
+        " (dividends included, contributions excluded):"
+    )
     print(f"  Portfolio:        {port_return:+.2f}%")
     print(f"  {benchmark_ticker:<16}  {bench_return:+.2f}%")
     print(f"  vs benchmark:     {port_return - bench_return:+.2f} pts")

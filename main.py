@@ -3,6 +3,7 @@ from datetime import date
 from dashboard import display_data
 from import_transactions import import_csv
 from investment_holdings_calc import (
+    audit_splits,
     compare_to_market,
     dense_priced_holdings_in_window,
     get_investment_holdings_calendar,
@@ -21,6 +22,8 @@ def main():
     priced_holdings = dense_priced_holdings_in_window(
         start, end, holdings_calendar, dates
     )
+
+    audit_splits(holdings_calendar, dates, end)
 
     comparisons = {
         ticker: compare_to_market(priced_holdings, ticker) for ticker in ("SPY", "QQQ")
