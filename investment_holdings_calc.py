@@ -5,7 +5,7 @@ import pandas as pd
 
 import yfinance as yf
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 import math
 from decimal import Decimal
 import bisect
@@ -178,22 +178,26 @@ def dense_priced_holdings_in_window(
                 (pd.Timestamp(start), pd.Timestamp(end), unique_key)
             )
 
-    def get_price(ticker, date, column="Close"):
-        date = pd.Timestamp(date)
+    def get_price(ticker, current_date, column="Close"):
+        current_date = pd.Timestamp(current_date)
 
         for start, end, key in ticker_windows.get(ticker, []):
             if start <= date <= end:
                 df = loaded_data[key]
-                price = df[column].asof(date)  # last available price on/before date
+                price = df[column].asof(
+                    current_date
+                )  # last available price on/before date
                 if pd.isna(price):
                     raise ValueError(
-                        f"No data for {ticker} at or before {date.date()} in window {key}"
+                        f"No data for {ticker} at or before {current_date.date()} in window {key}"
                     )
                 return price
 
-        raise KeyError(f"{date.date()} not within any loaded window for {ticker}")
+        raise KeyError(
+            f"{current_date.date()} not within any loaded window for {ticker}"
+        )
 
-    for i, (date, holdings) in enumerate(result):
+    for i, (current_date, holdings) in enumerate(result):
         if holdings is None:
             continue
         priced = {}
@@ -201,9 +205,9 @@ def dense_priced_holdings_in_window(
             if symbol == "CASH":
                 priced[symbol] = quantity
                 continue
-            price = Decimal(str(get_price(symbol, date)))
+            price = Decimal(str(get_price(symbol, current_date)))
             priced[symbol] = (quantity, price, quantity * price)
-        result[i] = (date, priced)
+        result[i] = (current_date, priced)
 
     return result
 

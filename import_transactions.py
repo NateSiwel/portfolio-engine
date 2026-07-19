@@ -6,6 +6,7 @@ import io
 import os
 
 from datetime import datetime
+from decimal import Decimal
 
 
 class NormalizedRow:
@@ -94,8 +95,6 @@ def get_idempotent_key(row, bank, account_name):
 
 
 DATE_MAPPING = {"fidelity": "%m/%d/%Y"}
-
-from decimal import Decimal
 
 
 def normalize_row(bank, row):
