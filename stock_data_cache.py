@@ -23,6 +23,7 @@ deleted.
 import json
 import os
 from datetime import date, timedelta
+from typing import cast
 from urllib.parse import quote
 
 import pandas as pd
@@ -83,15 +84,15 @@ def _unadjust_splits(df: pd.DataFrame, splits: pd.Series) -> pd.DataFrame:
     """
     if splits is None or splits.empty:
         return df
-    if splits.index.tz is not None:
+    if cast(pd.DatetimeIndex, splits.index).tz is not None:
         splits = splits.tz_localize(None)
     factor = pd.Series(1.0, index=df.index)
-    days = df.index.normalize()
+    days = cast(pd.DatetimeIndex, df.index).normalize()
     for ts, ratio in splits.items():
         if ratio:
             # The bar on the split day itself is already post-split; event
             # timestamps carry a time-of-day, so compare whole days.
-            factor.loc[days < ts.normalize()] *= float(ratio)
+            factor.loc[days < cast(pd.Timestamp, ts).normalize()] *= float(ratio)
     for col in ("Open", "High", "Low", "Close"):
         if col in df.columns:
             df[col] = df[col] * factor
