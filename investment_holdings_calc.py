@@ -7,6 +7,7 @@ import yfinance as yf
 
 from datetime import date, timedelta
 import math
+from typing import cast
 from decimal import Decimal
 import bisect
 
@@ -37,7 +38,7 @@ def _fetch_close_prices(ticker: str, start: date, end: date) -> dict:
     for ts, close in data["Close"].items():
         if close is None or (isinstance(close, float) and math.isnan(close)):
             continue
-        prices[ts.date()] = Decimal(str(round(float(close), 6)))
+        prices[cast(pd.Timestamp, ts).date()] = Decimal(str(round(float(close), 6)))
     return prices
 
 
@@ -79,7 +80,7 @@ def get_investment_holdings_calendar(
     return date_dict
 
 
-def print_holdings_calendar(holdings_calendar: dict[str, dict[str, Decimal]]):
+def print_holdings_calendar(holdings_calendar: dict[date, dict[str, Decimal]]):
     """Prints the holdings calendar in a readable format."""
 
     holdings_calendar = {k: v for k, v in sorted(holdings_calendar.items())}
@@ -92,7 +93,9 @@ def print_holdings_calendar(holdings_calendar: dict[str, dict[str, Decimal]]):
 
 
 def holdings_on_date(
-    target_date: date, holdings_calendar: dict[str, dict[str, Decimal]], sorted_dates
+    target_date: date,
+    holdings_calendar: dict[date, dict[str, Decimal]],
+    sorted_dates: list[date],
 ):
     i = bisect.bisect_right(sorted_dates, target_date) - 1
     if i < 0:
@@ -103,8 +106,8 @@ def holdings_on_date(
 def dense_priced_holdings_in_window(
     start_date: date,
     end_date: date,
-    holdings_calendar: dict[str, dict[str, Decimal]],
-    sorted_dates,
+    holdings_calendar: dict[date, dict[str, Decimal]],
+    sorted_dates: list[date],
 ):
     """Returns a list of valued holdings for each day in the window [start_date, end_date]."""
     current_holdings = None
@@ -292,8 +295,13 @@ def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):
         portfolio_curve.append(growth)
 
     closes = _load_benchmark_closes(benchmark_ticker, dates[0], dates[-1])
-    base = closes.asof(pd.Timestamp(dates[0]))
-    benchmark_curve = [float(closes.asof(pd.Timestamp(d)) / base) for d in dates]
+
+    def close_at(d: date) -> float:
+        # asof is typed as returning any pandas scalar; Close is always numeric.
+        return float(cast(float, closes.asof(pd.Timestamp(d))))
+
+    base = close_at(dates[0])
+    benchmark_curve = [close_at(d) / base for d in dates]
 
     port_return = (portfolio_curve[-1] - 1) * 100
     bench_return = (benchmark_curve[-1] - 1) * 100
