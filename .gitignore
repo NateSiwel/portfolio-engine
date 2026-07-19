@@ -1,0 +1,7 @@
+stock_data/*
+csvs/*
+!README.md
+.vscode
+.ruff_cache
+__pycache__
+portfolio_dashboard.html
