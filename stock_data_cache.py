@@ -107,9 +107,13 @@ def _load_cached(ticker: str) -> pd.DataFrame:
 
 def _save(ticker: str, df: pd.DataFrame, start: date, end: date) -> None:
     os.makedirs(CACHE_DIR, exist_ok=True)
-    df.to_csv(_csv_path(ticker), index_label="Date")
-    with open(_meta_path(ticker), "w") as f:
+    csv_path = _csv_path(ticker)
+    df.to_csv(csv_path + ".tmp", index_label="Date")
+    os.replace(csv_path + ".tmp", csv_path)
+    meta_path = _meta_path(ticker)
+    with open(meta_path + ".tmp", "w") as f:
         json.dump({"start": start.isoformat(), "end": end.isoformat()}, f)
+    os.replace(meta_path + ".tmp", meta_path)
     _set_frame(ticker, df)
     _metas[ticker] = (start, end)
 
