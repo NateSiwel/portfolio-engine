@@ -147,6 +147,7 @@ def dense_priced_holdings_in_window(
 
     loaded_data = {}
     ticker_windows = {}
+    os.makedirs("stock_data", exist_ok=True)
     for ticker, periods in search_dict.items():
         if ticker == "CASH":
             continue
@@ -223,6 +224,7 @@ def _load_benchmark_closes(ticker: str, start: date, end: date) -> pd.Series:
     window opens on a weekend or holiday.
     """
     fetch_start = start - timedelta(days=7)
+    os.makedirs("stock_data", exist_ok=True)
     unique_key = f"{ticker}_{fetch_start}_{end}"
     file_path = f"stock_data/{unique_key}.csv"
 
