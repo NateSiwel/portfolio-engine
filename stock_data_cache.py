@@ -39,6 +39,7 @@ def filename_key(ticker: str) -> str:
         key = f"%{ord(key[0]):02X}{key[1:]}"
     return key
 
+
 # In-process caches keyed by ticker: loaded CSVs, covered ranges, and column
 # Series handed out by get_price (invalidated whenever the frame changes).
 _frames: dict[str, pd.DataFrame] = {}
