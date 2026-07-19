@@ -31,11 +31,18 @@ def get_investment_holdings_calendar(
 
         # A row's Cash Balance reflects cash after that transaction
         # (buys/sells included), so keep CASH current on every row that has
-        # one. Corporate-action rows (split distributions) leave it blank —
-        # None — and must not touch CASH.
+        # one. Rows without a balance either carry a signed cash amount
+        # (banks with no running-balance column) or are pure share moves
+        # like split distributions, which must not touch CASH.
         if row.cash_balance is not None:
-            date_obj["CASH"] = row.cash_balance
-            running_dict["CASH"] = row.cash_balance
+            new_cash = row.cash_balance
+        elif row.amount:
+            new_cash = running_dict.get("CASH", Decimal(0)) + row.amount
+        else:
+            new_cash = None
+        if new_cash is not None:
+            date_obj["CASH"] = new_cash
+            running_dict["CASH"] = new_cash
 
         if symbol == "CASH":
             continue

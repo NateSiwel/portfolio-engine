@@ -6,6 +6,29 @@ import io
 
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
+
+
+class ActionType(Enum):
+    """Bank-agnostic meaning of a transaction row.
+
+    The holdings math itself runs on quantity/amount/cash_balance; the type
+    exists so consumers can reason about semantics (e.g. a SPLIT moves shares
+    without cash) and so unmapped actions from a new bank surface loudly
+    instead of flowing through silently.
+    """
+
+    BUY = "buy"
+    SELL = "sell"
+    DIVIDEND = "dividend"  # cash distribution, incl. capital gains
+    REINVESTMENT = "reinvestment"
+    SPLIT = "split"  # share distribution / reverse split: qty delta, no cash
+    DEPOSIT = "deposit"  # external cash in
+    WITHDRAWAL = "withdrawal"  # external cash out
+    TRANSFER = "transfer"  # cash/securities moved between accounts
+    INTEREST = "interest"
+    FEE = "fee"
+    UNKNOWN = "unknown"
 
 
 class NormalizedRow:
@@ -16,9 +39,12 @@ class NormalizedRow:
     balance. amount/quantity/price default to 0 when blank.
     """
 
-    def __init__(self, date, action, symbol, amount, quantity, cash_balance, price):
+    def __init__(
+        self, date, action, action_type, symbol, amount, quantity, cash_balance, price
+    ):
         self.date = date
         self.action = action
+        self.action_type = action_type
         self.symbol = symbol
         self.amount = amount
         self.quantity = quantity
@@ -26,31 +52,44 @@ class NormalizedRow:
         self.price = price
 
 
-# idempotent key properties that map the name of a bank to a list of column headers that are used to identify unique transactions
-# Key automatically includes name of the bank + account_name
-idempotent_key_properties = {
-    "fidelity": [
-        "Run Date",
-        "Action",
-        "Symbol",
-        "Amount ($)",
-        "Quantity",
-        "Cash Balance ($)",
-    ]
-}
+class BankAdapter:
+    """Everything bank-specific about reading one bank's CSV export.
 
-# normalized -> real mapping of column names for each bank
-column_mapping = {
-    "fidelity": {
-        "date": "Run Date",
-        "action": "Action",
-        "symbol": "Symbol",
-        "amount": "Amount ($)",
-        "quantity": "Quantity",
-        "cash_balance": "Cash Balance ($)",
-        "price": "Price ($)",
-    }
-}
+    parse_csv: path -> list of {header: value} dicts for the data rows.
+    columns: normalized field name -> that bank's column header.
+    date_format: strptime format of the date column.
+    key_columns: headers whose values identify a unique transaction
+        (the idempotent key automatically includes bank + account name).
+    action_rules: ordered (substring, ActionType) pairs; the first substring
+        found in the uppercased action text wins. Order rules most-specific
+        first — company names can contain rule words.
+    symbol_aliases: old -> new symbol renames (e.g. a reverse split that
+        reissues shares under a temporary CUSIP), applied at normalize time
+        so the ledger and the price source agree on one name.
+    """
+
+    def __init__(
+        self,
+        parse_csv,
+        columns,
+        date_format,
+        key_columns,
+        action_rules,
+        symbol_aliases=None,
+    ):
+        self.parse_csv = parse_csv
+        self.columns = columns
+        self.date_format = date_format
+        self.key_columns = key_columns
+        self.action_rules = action_rules
+        self.symbol_aliases = symbol_aliases or {}
+
+    def classify(self, action_text) -> ActionType:
+        text = (action_text or "").upper()
+        for pattern, action_type in self.action_rules:
+            if pattern in text:
+                return action_type
+        return ActionType.UNKNOWN
 
 
 def parse_fidelity_csv(path) -> list:
@@ -90,17 +129,64 @@ def parse_fidelity_csv(path) -> list:
     return rows
 
 
+FIDELITY = BankAdapter(
+    parse_csv=parse_fidelity_csv,
+    columns={
+        "date": "Run Date",
+        "action": "Action",
+        "symbol": "Symbol",
+        "amount": "Amount ($)",
+        "quantity": "Quantity",
+        "cash_balance": "Cash Balance ($)",
+        "price": "Price ($)",
+    },
+    date_format="%m/%d/%Y",
+    key_columns=[
+        "Run Date",
+        "Action",
+        "Symbol",
+        "Amount ($)",
+        "Quantity",
+        "Cash Balance ($)",
+    ],
+    action_rules=[
+        ("YOU BOUGHT", ActionType.BUY),
+        ("YOU SOLD", ActionType.SELL),
+        ("REINVESTMENT", ActionType.REINVESTMENT),
+        ("DIVIDEND RECEIVED", ActionType.DIVIDEND),
+        ("CAP GAIN", ActionType.DIVIDEND),  # LONG-TERM/SHORT-TERM CAP GAIN
+        ("CASH IN LIEU", ActionType.SELL),  # fractional-share proceeds
+        ("REVERSE SPLIT", ActionType.SPLIT),
+        ("R/S", ActionType.SPLIT),
+        ("DISTRIBUTION", ActionType.SPLIT),  # forward split's share delivery
+        ("DIRECT DEPOSIT", ActionType.DEPOSIT),
+        ("CASH CONTRIBUTION", ActionType.DEPOSIT),
+        ("DIRECT DEBIT", ActionType.WITHDRAWAL),
+        ("ELECTRONIC FUNDS TRANSFER", ActionType.TRANSFER),
+        ("TRANSFERRED", ActionType.TRANSFER),
+        ("INTEREST", ActionType.INTEREST),
+        ("FOREIGN TAX", ActionType.FEE),
+        ("FEE", ActionType.FEE),
+    ],
+)
+
+BANKS = {"fidelity": FIDELITY}
+
+
+def _adapter(bank) -> BankAdapter:
+    adapter = BANKS.get(bank.lower())
+    if not adapter:
+        raise ValueError(
+            f"No adapter defined for bank '{bank}' (known: {sorted(BANKS)})"
+        )
+    return adapter
+
+
 def get_idempotent_key(row, bank, account_name):
     """Return a unique key for a transaction row based on the bank and account name."""
-    key_properties = idempotent_key_properties.get(bank.lower())
-    if not key_properties:
-        raise ValueError(f"No idempotent key properties defined for bank '{bank}'")
-
-    key_values = [row.get(prop, "").strip() for prop in key_properties]
+    adapter = _adapter(bank)
+    key_values = [row.get(prop, "").strip() for prop in adapter.key_columns]
     return f"{bank}:{account_name}:" + ":".join(key_values)
-
-
-DATE_MAPPING = {"fidelity": "%m/%d/%Y"}
 
 
 def _decimal(value, default=None):
@@ -115,19 +201,21 @@ def _decimal(value, default=None):
 
 
 def normalize_row(bank, row):
-    mapping = column_mapping.get(bank.lower())
-    if not mapping:
-        raise ValueError(f"No column mapping defined for bank '{bank}'")
+    adapter = _adapter(bank)
+    mapping = adapter.columns
 
     # parse date into date object
     parsed_date = datetime.strptime(
-        row.get(mapping["date"]), DATE_MAPPING[bank.lower()]
+        row.get(mapping["date"]), adapter.date_format
     ).date()
 
+    action = row.get(mapping["action"])
+    symbol = (row.get(mapping["symbol"]) or "").strip()
     normalized_row = NormalizedRow(
         date=parsed_date,
-        action=row.get(mapping["action"]),
-        symbol=row.get(mapping["symbol"]),
+        action=action,
+        action_type=adapter.classify(action),
+        symbol=adapter.symbol_aliases.get(symbol, symbol),
         amount=_decimal(row.get(mapping["amount"]), Decimal(0)),
         quantity=_decimal(row.get(mapping["quantity"]), Decimal(0)),
         cash_balance=_decimal(row.get(mapping["cash_balance"])),
@@ -143,38 +231,43 @@ def import_csv(folder_path) -> list[NormalizedRow]:
     folder_path = Path(str(folder_path).replace("\\\\", "/"))
     bank = folder_path.parts[-2]
     account_name = folder_path.parts[-1]
+    adapter = _adapter(bank)
 
     seen = set()
     normalized_rows = []
     all_rows = []
     for csv_path in folder_path.glob("*.csv"):
-        rows = parse_fidelity_csv(csv_path)
+        rows = adapter.parse_csv(csv_path)
         # Fidelity exports newest-first; reverse so same-date rows stay
         # chronological through the stable date sort below (row order is the
         # only intra-day sequencing signal — there is no timestamp column).
         all_rows.extend(reversed(rows))
 
-    mapping = column_mapping.get(bank.lower())
-    if not mapping:
-        raise ValueError(f"No column mapping defined for bank '{bank}'")
     all_rows.sort(
         key=lambda x: datetime.strptime(
-            x.get(mapping["date"]), DATE_MAPPING[bank.lower()]
+            x.get(adapter.columns["date"]), adapter.date_format
         ).date()
     )
     for row in all_rows:
         idempotent_key = get_idempotent_key(row, bank, account_name)
 
-        # print(idempotent_key, row)
         if idempotent_key in seen:
-            # print(f"Duplicate transaction found: {idempotent_key}")
             continue
-            # raise ValueError(f"Duplicate transaction found: {idempotent_key}")
         seen.add(idempotent_key)
 
         normalized_row = normalize_row(bank, row)
         normalized_rows.append(normalized_row)
-        # table.add_record(idempotent_key, normalized_row)
+
+    unknown = sorted({
+        (r.action or "").strip()
+        for r in normalized_rows
+        if r.action_type is ActionType.UNKNOWN
+    })
+    if unknown:
+        print(f"WARNING: {len(unknown)} unrecognized action(s) in {folder_path}:")
+        for action in unknown:
+            print(f"  {action}")
+        print("  (rows still imported; classify them in the bank's action_rules)")
 
     return normalized_rows
 
