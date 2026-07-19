@@ -3,7 +3,6 @@
 # --------------------------------------------------------------------------- #
 import csv
 import io
-import os
 
 from datetime import datetime
 from decimal import Decimal
@@ -103,7 +102,9 @@ def normalize_row(bank, row):
         raise ValueError(f"No column mapping defined for bank '{bank}'")
 
     # parse date into date object
-    parsed_date = datetime.strptime(row.get(mapping["date"]), DATE_MAPPING[bank.lower()]).date()
+    parsed_date = datetime.strptime(
+        row.get(mapping["date"]), DATE_MAPPING[bank.lower()]
+    ).date()
 
     normalized_row = NormalizedRow(
         date=parsed_date,
