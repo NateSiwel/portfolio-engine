@@ -3,42 +3,11 @@ from stock_data_cache import get_history, get_price
 import pandas as pd
 
 from datetime import date, timedelta
-import math
 from typing import cast
 from decimal import Decimal
 import bisect
 
 CASH_SYMBOLS = {"SPAXX", "FDRXX", "SWVXX", "SWVYX", "SWVZX"}
-
-
-def _fetch_close_prices(ticker: str, start: date, end: date) -> dict:
-    """Daily close prices for one ticker over [start, end] from yfinance.
-
-    Returns {date: Decimal(close)} for trading days only. Network/lookup failures
-    return {} so the caller can fall back rather than abort the whole backfill.
-    """
-    import yfinance as yf
-
-    try:
-        # yfinance's `end` is exclusive, so push it out a day to include `end`.
-        data = yf.Ticker(ticker).history(
-            start=start.isoformat(),
-            end=(end + timedelta(days=1)).isoformat(),
-            auto_adjust=False,
-        )
-    except Exception as e:
-        print(f"  yfinance fetch failed for {ticker}: {e}")
-        return {}
-
-    if data is None or data.empty or "Close" not in data:
-        return {}
-
-    prices = {}
-    for ts, close in data["Close"].items():
-        if close is None or (isinstance(close, float) and math.isnan(close)):
-            continue
-        prices[cast(pd.Timestamp, ts).date()] = Decimal(str(round(float(close), 6)))
-    return prices
 
 
 def get_investment_holdings_calendar(
