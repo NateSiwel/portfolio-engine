@@ -1,9 +1,6 @@
-import os
-
 from import_transactions import NormalizedRow, import_csv
+from stock_data_cache import get_history, get_price
 import pandas as pd
-
-import yfinance as yf
 
 from datetime import date, timedelta
 import math
@@ -20,6 +17,8 @@ def _fetch_close_prices(ticker: str, start: date, end: date) -> dict:
     Returns {date: Decimal(close)} for trading days only. Network/lookup failures
     return {} so the caller can fall back rather than abort the whole backfill.
     """
+    import yfinance as yf
+
     try:
         # yfinance's `end` is exclusive, so push it out a day to include `end`.
         data = yf.Ticker(ticker).history(
@@ -148,62 +147,16 @@ def dense_priced_holdings_in_window(
         result.append((current_date, current_holdings))
         current_date += timedelta(days=1)
 
-    loaded_data = {}
-    ticker_windows = {}
-    os.makedirs("stock_data", exist_ok=True)
+    # Warm the per-ticker cache over each ticker's full ownership span so the
+    # per-day pricing loop below never triggers a download.
     for ticker, periods in search_dict.items():
         if ticker == "CASH":
             continue
-        for start, end in periods:
-            if end is None:
-                end = end_date
-
-            unique_key = f"{ticker}_{start}_{end}"
-            file_path = f"stock_data/{unique_key}.csv"
-
-            if not os.path.exists(file_path):
-                print(f"Downloading {ticker}...")
-                df = yf.download(
-                    ticker,
-                    start=start,
-                    end=end + timedelta(days=1),  # yfinance `end` is exclusive
-                    interval="1d",
-                    multi_level_index=False,
-                )
-                if df is None or df.empty:
-                    print(
-                        f"Failed to download data for {ticker} from {start} to {end}."
-                    )
-                    continue
-
-                df.to_csv(file_path)
-            else:
-                print(f"Loading {ticker} from local storage...")
-                df = pd.read_csv(file_path, parse_dates=["Date"], index_col="Date")
-
-            loaded_data[unique_key] = df
-            ticker_windows.setdefault(ticker, []).append(
-                (pd.Timestamp(start), pd.Timestamp(end), unique_key)
-            )
-
-    def get_price(ticker, current_date, column="Close"):
-        current_date = pd.Timestamp(current_date)
-
-        for start, end, key in ticker_windows.get(ticker, []):
-            if start <= current_date <= end:
-                df = loaded_data[key]
-                price = df[column].asof(
-                    current_date
-                )  # last available price on/before date
-                if pd.isna(price):
-                    raise ValueError(
-                        f"No data for {ticker} at or before {current_date.date()} in window {key}"
-                    )
-                return price
-
-        raise KeyError(
-            f"{current_date.date()} not within any loaded window for {ticker}"
-        )
+        # Periods are chronological; a None end means still held at end_date.
+        first_owned = periods[0][0]
+        last_owned = periods[-1][1] or end_date
+        # A week of padding matches get_price's asof lookback.
+        get_history(ticker, first_owned - timedelta(days=7), last_owned)
 
     for i, (current_date, holdings) in enumerate(result):
         if holdings is None:
@@ -221,33 +174,12 @@ def dense_priced_holdings_in_window(
 
 
 def _load_benchmark_closes(ticker: str, start: date, end: date) -> pd.Series:
-    """Daily Close series for a benchmark ticker, cached in stock_data/.
+    """Daily Close series for a benchmark ticker, from the shared price cache.
 
-    Starts the download a week early so `asof` has a price even when the
-    window opens on a weekend or holiday.
+    Starts a week early so `asof` has a price even when the window opens on a
+    weekend or holiday.
     """
-    fetch_start = start - timedelta(days=7)
-    os.makedirs("stock_data", exist_ok=True)
-    unique_key = f"{ticker}_{fetch_start}_{end}"
-    file_path = f"stock_data/{unique_key}.csv"
-
-    if not os.path.exists(file_path):
-        print(f"Downloading {ticker}...")
-        df = yf.download(
-            ticker,
-            start=fetch_start,
-            end=end + timedelta(days=1),  # yfinance `end` is exclusive
-            interval="1d",
-            multi_level_index=False,
-        )
-        if df is None or df.empty:
-            raise ValueError(f"Failed to download benchmark data for {ticker}")
-        df.to_csv(file_path)
-    else:
-        print(f"Loading {ticker} from local storage...")
-        df = pd.read_csv(file_path, parse_dates=["Date"], index_col="Date")
-
-    return df["Close"]
+    return get_history(ticker, start - timedelta(days=7), end)["Close"]
 
 
 def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):

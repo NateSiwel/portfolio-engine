@@ -5,3 +5,4 @@ csvs/*
 .ruff_cache
 __pycache__
 portfolio_dashboard.html
+CLAUDE.md
