@@ -258,11 +258,13 @@ def import_csv(folder_path) -> list[NormalizedRow]:
         normalized_row = normalize_row(bank, row)
         normalized_rows.append(normalized_row)
 
-    unknown = sorted({
-        (r.action or "").strip()
-        for r in normalized_rows
-        if r.action_type is ActionType.UNKNOWN
-    })
+    unknown = sorted(
+        {
+            (r.action or "").strip()
+            for r in normalized_rows
+            if r.action_type is ActionType.UNKNOWN
+        }
+    )
     if unknown:
         print(f"WARNING: {len(unknown)} unrecognized action(s) in {folder_path}:")
         for action in unknown:

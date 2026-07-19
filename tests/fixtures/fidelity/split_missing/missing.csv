@@ -1,0 +1,8 @@
+Brokerage
+
+History for Account X99999999
+
+Run Date,Action,Symbol,Description,Type,Price ($),Quantity,Commission ($),Fees ($),Accrued Interest ($),Amount ($),Cash Balance ($),Settlement Date
+01/05/2024,"YOU BOUGHT NVIDIA CORPORATION COM (NVDA) (Cash)",NVDA,"NVIDIA CORPORATION COM",Cash,490.00,2,,,,-980,100.00,01/08/2024
+
+"The data and information in this spreadsheet is provided to you solely for your use and is not for distribution."

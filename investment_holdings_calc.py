@@ -152,6 +152,99 @@ def dense_priced_holdings_in_window(
     return result
 
 
+def audit_splits(
+    holdings_calendar: dict[date, dict[str, Decimal]],
+    sorted_dates: list[date],
+    end: date,
+    tolerance_days: int = 8,
+    threshold: float = 0.2,
+):
+    """Cross-check ledger share counts against market split events.
+
+    For every split a held ticker underwent (per the price cache's Stock
+    Splits column), the ledger's share count must jump by roughly the same
+    ratio — brokers deliver splits as ordinary quantity rows, so a missing
+    jump means the bank reported the split in a format the adapter didn't
+    recognize (or the export omitted it), and every valuation after that
+    date is off by the ratio.
+
+    The broker's split row can land a few days after the effective date and
+    ordinary trades nearby also move the count, so the ledger passes if ANY
+    snapshot within tolerance_days after the split shows roughly the split's
+    jump relative to the count before it. Trades in the window can still
+    distort the ratio, so treat a warning as a pointer, not a verdict.
+    Returns a list of (symbol, split_date, market_ratio, ledger_ratio, ok)
+    events, where ledger_ratio is the candidate closest to the market's.
+    """
+    events = []
+    symbols = sorted({s for h in holdings_calendar.values() for s in h if s != "CASH"})
+    for symbol in symbols:
+        held_dates = [d for d in sorted_dates if holdings_calendar[d].get(symbol)]
+        if not held_dates:
+            continue
+        first_held = held_dates[0]
+        # Snapshots carry held symbols forward, so the symbol is still held
+        # iff it appears in the final snapshot; otherwise its span ends at
+        # its last nonzero date (padded so a split on the sell-out day with
+        # a late-posting broker row is still checked).
+        if holdings_calendar[sorted_dates[-1]].get(symbol):
+            last_held = end
+        else:
+            last_held = held_dates[-1] + timedelta(days=tolerance_days)
+        try:
+            hist = get_history(symbol, first_held, min(last_held, end, date.today()))
+        except ValueError:
+            continue  # no market data; pricing already surfaces this
+        if "Stock Splits" not in hist.columns:
+            continue
+        splits = hist["Stock Splits"]
+        for ts, ratio in splits[splits != 0].items():
+            split_day = cast(pd.Timestamp, ts).date()
+            before = (
+                holdings_on_date(
+                    split_day - timedelta(days=tolerance_days),
+                    holdings_calendar,
+                    sorted_dates,
+                )
+                or {}
+            )
+            qty_before = before.get(symbol) or Decimal(0)
+            if not qty_before:
+                continue  # not held when it split
+            window_end = split_day + timedelta(days=tolerance_days)
+            candidates = [
+                holdings_calendar[d].get(symbol) or Decimal(0)
+                for d in sorted_dates
+                if split_day <= d <= window_end
+            ]
+            after = holdings_on_date(window_end, holdings_calendar, sorted_dates) or {}
+            candidates.append(after.get(symbol) or Decimal(0))
+            market_ratio = float(ratio)
+            ledger_ratio = min(
+                (float(q / qty_before) for q in candidates),
+                key=lambda r: abs(r - market_ratio),
+            )
+            ok = abs(ledger_ratio - market_ratio) <= market_ratio * threshold
+            events.append((symbol, split_day, market_ratio, ledger_ratio, ok))
+            if not ok:
+                print(
+                    f"WARNING: {symbol} split {ratio:g}:1 on {split_day} but the"
+                    f" ledger's share count (x{qty_before} before) never jumped"
+                    f" accordingly (closest: x{ledger_ratio:.2f}); a split row"
+                    f" probably failed to import — valuations after"
+                    f" {split_day} are suspect."
+                )
+    verified = sum(1 for e in events if e[4])
+    if events:
+        print(
+            f"Split audit: {verified} split(s) verified,"
+            f" {len(events) - verified} problem(s)."
+        )
+    else:
+        print("Split audit: no splits during holding periods.")
+    return events
+
+
 def _load_benchmark_closes(ticker: str, start: date, end: date) -> pd.Series:
     """Daily Adj Close series for a benchmark ticker, from the price cache.
 
