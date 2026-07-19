@@ -95,6 +95,13 @@ def dense_priced_holdings_in_window(
         current_holdings = holdings_calendar[sorted_dates[i]]
 
     search_dict = {}  # {symbol: [(start_date, end_date), ...]}
+    # Positions opened before the window never appear as new_holdings on a
+    # transition day below, so seed their ownership periods here — otherwise
+    # they'd be priced one uncached day at a time.
+    if current_holdings:
+        for symbol in current_holdings:
+            if symbol != "CASH":
+                search_dict[symbol] = [(start_date, None)]
 
     result = []
     current_date = start_date

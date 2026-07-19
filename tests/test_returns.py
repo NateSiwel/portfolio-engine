@@ -44,6 +44,22 @@ def test_twr_is_split_neutral(split_portfolio):
     assert abs(port[-1] - nvda) / nvda < 0.03
 
 
+def test_preexisting_position_warms_cache_once(split_portfolio, tmp_cache, monkeypatch):
+    """A position opened before the window starts must be pre-warmed with a
+    single download, not extended one uncached day at a time by get_price."""
+    cal, dates = split_portfolio
+    sdc = tmp_cache
+
+    calls = []
+    real = sdc._download
+    monkeypatch.setattr(sdc, "_download", lambda *a: calls.append(a) or real(*a))
+
+    dense_priced_holdings_in_window(date(2024, 6, 3), date(2024, 6, 14), cal, dates)
+
+    nvda_calls = [c for c in calls if c[0] == "NVDA"]
+    assert len(nvda_calls) == 1, f"expected one warm-up download, got {nvda_calls}"
+
+
 def test_audit_verifies_imported_split(split_portfolio):
     cal, dates = split_portfolio
     events = audit_splits(cal, dates, date(2024, 6, 14))
