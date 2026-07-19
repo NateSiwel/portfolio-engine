@@ -12,10 +12,32 @@ deleted.
 import json
 import os
 from datetime import date, timedelta
+from urllib.parse import quote
 
 import pandas as pd
 
 CACHE_DIR = "stock_data"
+
+# Windows device names that would otherwise survive percent-encoding untouched
+# and resolve to devices instead of files (e.g. NUL.csv).
+_RESERVED_NAMES = (
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
+)
+
+
+def filename_key(ticker: str) -> str:
+    """Deterministic, filesystem-safe filename stem for a ticker.
+
+    Percent-encodes everything outside [A-Za-z0-9_.~-], so path separators,
+    drive prefixes, and ".." can never escape CACHE_DIR. Real tickers (AAPL,
+    BRK.B) pass through unchanged, keeping existing cache files valid.
+    """
+    key = quote(ticker, safe="")
+    if key.split(".")[0].upper() in _RESERVED_NAMES:
+        key = f"%{ord(key[0]):02X}{key[1:]}"
+    return key
 
 # In-process caches keyed by ticker: loaded CSVs, covered ranges, and column
 # Series handed out by get_price (invalidated whenever the frame changes).
@@ -25,11 +47,11 @@ _series: dict[tuple[str, str], pd.Series] = {}
 
 
 def _csv_path(ticker: str) -> str:
-    return os.path.join(CACHE_DIR, f"{ticker}.csv")
+    return os.path.join(CACHE_DIR, f"{filename_key(ticker)}.csv")
 
 
 def _meta_path(ticker: str) -> str:
-    return os.path.join(CACHE_DIR, f"{ticker}.meta.json")
+    return os.path.join(CACHE_DIR, f"{filename_key(ticker)}.meta.json")
 
 
 def _set_frame(ticker: str, df: pd.DataFrame) -> None:
