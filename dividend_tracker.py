@@ -148,6 +148,7 @@ def dividend_summary(
     average cost basis and market value, in percent. Sorted by projection,
     so non-payers sink to the bottom rather than disappearing.
     """
+    asof = min(asof, date.today())
     rows = []
     cutoff = pd.Timestamp(asof) - pd.Timedelta(days=365)
     for symbol, (shares, cost) in sorted(cost_basis_by_ticker(normalized_rows).items()):
