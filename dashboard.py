@@ -4,7 +4,7 @@ Interactive portfolio visualization.
 Data format per snapshot:
     (date, {'CASH': Decimal, 'TICKER': (shares, price, total_value), ...})
 
-Produces a single self-contained HTML file with four linked views
+Produces a single self-contained HTML file with several linked views
 (switchable via buttons), a range slider, unified hover, and a
 per-holding visibility legend.
 
@@ -36,12 +36,23 @@ CASH_TICKER = "CASH"
 BENCH_COLORS = ["#7f7f7f", "#ff7f0e", "#9467bd", "#8c564b"]
 
 
-def display_data(RAW, output_path="portfolio_dashboard.html", market_comparisons=None):
+def display_data(
+    RAW,
+    output_path="portfolio_dashboard.html",
+    market_comparisons=None,
+    dividend_events=None,
+    dividend_summary=None,
+):
     """Render the dashboard.
 
     market_comparisons: optional {ticker: (dates, portfolio_curve, benchmark_curve)}
     from compare_to_market; adds a "vs Market" view plotting the portfolio's
     time-weighted return against each benchmark.
+
+    dividend_events / dividend_summary: optional DataFrames from
+    dividend_tracker.dividend_events / dividend_summary; add a monthly
+    dividend income view and a per-ticker outlook view (projected forward
+    income bars, yield-on-cost and the rest of the metrics on hover).
     """
     # ---------------------------------------------------------------------------
     # Reshape into a tidy DataFrame: one row per (date, holding)
@@ -186,7 +197,8 @@ def display_data(RAW, output_path="portfolio_dashboard.html", market_comparisons
             )
         )
         groups.append(2)
-    fig.add_hline(y=0, line_dash="dot", line_color="gray", opacity=0.5)
+    # Zero line for the % views (2 and 4); the buttons toggle its visibility.
+    fig.add_hline(y=0, line_dash="dot", line_color="gray", opacity=0.5, visible=False)
 
     # --- View 3: latest allocation donut --------------------------------------
     latest = pivot_value.iloc[-1]
@@ -240,6 +252,103 @@ def display_data(RAW, output_path="portfolio_dashboard.html", market_comparisons
             )
             groups.append(4)
 
+    # --- View 5: dividend income by month + cumulative --------------------------
+    has_div_events = dividend_events is not None and len(dividend_events) > 0
+    if has_div_events:
+        from dividend_tracker import income_by_period
+
+        monthly = income_by_period(dividend_events, "M")
+        month_x = monthly.index.to_timestamp()  # bars sit at each month's start
+        payers = sorted(
+            (c for c in monthly.columns if c != "Total"),
+            key=lambda t: -monthly[t].sum(),
+        )
+        extra = 0  # payers never held as positions (no color assigned yet)
+        for t in payers:
+            color = colors.get(t)
+            if color is None:
+                color = PALETTE[(len(tickers) + extra) % len(PALETTE)]
+                extra += 1
+            fig.add_trace(
+                go.Bar(
+                    x=month_x,
+                    y=monthly[t],
+                    name=t,
+                    marker_color=color,
+                    hovertemplate=f"{t}: $%{{y:,.2f}}<extra></extra>",
+                )
+            )
+            groups.append(5)
+        fig.add_trace(
+            go.Scatter(
+                x=month_x,
+                y=monthly["Total"].cumsum(),
+                name="Cumulative",
+                mode="lines+markers",
+                line=dict(color="#1f77b4", width=2.5, dash="dot"),
+                hovertemplate="Cumulative: $%{y:,.2f}<extra></extra>",
+            ),
+            secondary_y=True,
+        )
+        groups.append(5)
+
+    # --- View 6: dividend outlook (projected income per ticker) -----------------
+    # Horizontal bars on a pair of overlaid axes (xaxis2/yaxis3): the shared
+    # xaxis is date-typed, and a go.Table can't be used because plotly.js
+    # crashes redrawing tables alongside a rangeslider figure.
+    outlook = None
+    if dividend_summary is not None and len(dividend_summary) > 0:
+        s = dividend_summary
+        payers_or_paid = s[(s["projected_income"] > 0) | (s["total_received"] > 0)]
+        if len(payers_or_paid) > 0:
+            outlook = payers_or_paid.sort_values("projected_income")
+    has_div_summary = outlook is not None
+    if has_div_summary:
+        proj_total = float(outlook["projected_income"].sum())
+        cost_total = float(outlook["cost_basis"].sum())
+        fig.add_trace(
+            go.Bar(
+                x=outlook["projected_income"],
+                y=outlook["symbol"],
+                orientation="h",
+                name="Projected income",
+                marker_color=[colors.get(t, PALETTE[0]) for t in outlook["symbol"]],
+                text=[
+                    f"YoC {yoc:.2f}% · yield {cy:.2f}%"
+                    for yoc, cy in zip(
+                        outlook["yield_on_cost"], outlook["current_yield"]
+                    )
+                ],
+                textposition="auto",
+                customdata=outlook[
+                    [
+                        "yield_on_cost",
+                        "current_yield",
+                        "avg_cost",
+                        "cost_basis",
+                        "ttm_received",
+                        "total_received",
+                        "ttm_dps",
+                    ]
+                ].values,
+                hovertemplate=(
+                    "%{y}: $%{x:,.2f}/yr<br>"
+                    "Yield on cost: %{customdata[0]:.2f}%"
+                    " · Current yield: %{customdata[1]:.2f}%<br>"
+                    "Avg cost: $%{customdata[2]:,.2f}"
+                    " · Cost basis: $%{customdata[3]:,.2f}<br>"
+                    "Received TTM: $%{customdata[4]:,.2f}"
+                    " · All-time: $%{customdata[5]:,.2f}<br>"
+                    "TTM rate: $%{customdata[6]:,.4f}/share"
+                    "<extra></extra>"
+                ),
+                xaxis="x2",
+                yaxis="y3",
+                visible=False,
+            )
+        )
+        groups.append(6)
+
     def vis(view):
         return [g == view for g in groups]
 
@@ -274,6 +383,33 @@ def display_data(RAW, output_path="portfolio_dashboard.html", market_comparisons
             yaxis2=dict(visible=False),
             title="Portfolio vs Market — time-weighted, contributions excluded",
         ),
+        5: dict(
+            xaxis=dict(visible=True),
+            yaxis=dict(visible=True, title="Dividend income ($/month)"),
+            yaxis2=dict(visible=True, title="Cumulative ($)"),
+            title="Dividend Income by Month",
+        ),
+        6: dict(
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            yaxis2=dict(visible=False),
+            xaxis2=True,
+            yaxis3=True,
+            hovermode="closest",
+            title=(
+                "Dividend Outlook — trailing-12-month rate × current shares"
+                + (
+                    f" (proj. ${proj_total:,.2f}/yr"
+                    + (
+                        f", {proj_total / cost_total * 100:.2f}% on cost)"
+                        if cost_total
+                        else ")"
+                    )
+                    if has_div_summary
+                    else ""
+                )
+            ),
+        ),
     }
 
     view_labels = [
@@ -282,11 +418,17 @@ def display_data(RAW, output_path="portfolio_dashboard.html", market_comparisons
         (2, "Price performance"),
         (3, "Current allocation"),
         (4, "vs Market"),
+        (5, "Dividend income"),
+        (6, "Dividend outlook"),
     ]
     if not price_tickers:  # cash-only portfolio
         view_labels = [v for v in view_labels if v[0] != 2]
     if not market_comparisons:
         view_labels = [v for v in view_labels if v[0] != 4]
+    if not has_div_events:
+        view_labels = [v for v in view_labels if v[0] != 5]
+    if not has_div_summary:
+        view_labels = [v for v in view_labels if v[0] != 6]
 
     buttons = []
     for view, label in view_labels:
@@ -304,6 +446,15 @@ def display_data(RAW, output_path="portfolio_dashboard.html", market_comparisons
                         "yaxis.title.text": lay["yaxis"].get("title", ""),
                         "yaxis2.visible": lay["yaxis2"]["visible"],
                         "yaxis2.title.text": lay["yaxis2"].get("title", ""),
+                        "xaxis2.visible": lay.get("xaxis2", False),
+                        "yaxis3.visible": lay.get("yaxis3", False),
+                        "hovermode": lay.get("hovermode", "x unified"),
+                        # Hiding the axis doesn't hide its rangeslider, and the
+                        # % change zero-line shape shows everywhere otherwise.
+                        "xaxis.rangeslider.visible": lay["xaxis"]["visible"],
+                        "shapes[0].visible": view in (2, 4),
+                        # % views (2, 4) shouldn't inherit view 0's $ prefix.
+                        "yaxis.tickprefix": "" if view in (2, 4) else "$",
                     },
                 ],
             )
@@ -317,6 +468,8 @@ def display_data(RAW, output_path="portfolio_dashboard.html", market_comparisons
         template="plotly_white",
         title=dict(text=axis_layouts[0]["title"], x=0.5, font=dict(size=22)),
         hovermode="x unified",
+        barmode="stack",  # stacks the per-ticker dividend bars; other views
+        # have at most one bar trace, so they're unaffected
         height=640,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
         updatemenus=[
@@ -346,6 +499,17 @@ def display_data(RAW, output_path="portfolio_dashboard.html", market_comparisons
         ),
         yaxis=dict(title="Portfolio value ($)", tickprefix="$", tickformat=",.0f"),
         yaxis2=dict(title="Daily change ($)", showgrid=False),
+        # Overlaid axis pair for the dividend-outlook bars: the shared xaxis
+        # is date-typed, so dollar-valued horizontal bars need their own axes.
+        xaxis2=dict(
+            overlaying="x",
+            visible=False,
+            title="Projected annual income ($)",
+            tickprefix="$",
+        ),
+        # No categoryorder here: "total ascending" crashes plotly.js while the
+        # axis's only trace is hidden, so the data is pre-sorted instead.
+        yaxis3=dict(overlaying="y", visible=False, type="category"),
         margin=dict(t=140),
     )
 
