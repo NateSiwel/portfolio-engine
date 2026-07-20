@@ -1,0 +1,14 @@
+Brokerage
+
+History for Account X99999999
+
+Run Date,Action,Symbol,Description,Type,Price ($),Quantity,Commission ($),Fees ($),Accrued Interest ($),Amount ($),Cash Balance ($),Settlement Date
+11/14/2024,"REINVESTMENT APPLE INC (AAPL) (Cash)",AAPL,"APPLE INC",Cash,225.00,0.011,,,,-2.50,111.40,
+11/14/2024,"DIVIDEND RECEIVED APPLE INC (AAPL) (Cash)",AAPL,"APPLE INC",Cash,,,,,,2.50,113.90,
+08/15/2024,"DIVIDEND RECEIVED APPLE INC (AAPL) (Cash)",AAPL,"APPLE INC",Cash,,,,,,2.50,111.40,
+05/16/2024,"DIVIDEND RECEIVED APPLE INC (AAPL) (Cash)",AAPL,"APPLE INC",Cash,,,,,,2.50,108.90,
+02/15/2024,"DIVIDEND RECEIVED APPLE INC (AAPL) (Cash)",AAPL,"APPLE INC",Cash,,,,,,2.40,106.40,
+01/31/2024,"DIVIDEND RECEIVED FIDELITY GOVERNMENT MONEY MARKET (SPAXX) (Cash)",SPAXX,"FIDELITY GOVERNMENT MONEY MARKET",Cash,,,,,,4.00,104.00,
+01/05/2024,"YOU BOUGHT APPLE INC (AAPL) (Cash)",AAPL,"APPLE INC",Cash,185.00,10,,,,-1850,100.00,01/08/2024
+
+"The data and information in this spreadsheet is provided to you solely for your use and is not for distribution."
