@@ -103,9 +103,7 @@ def run_regression(
     excess = data["port"] - data["RF"]
     design = sm.add_constant(data[factor_cols])
     maxlags = _hac_maxlags(len(data))
-    model = sm.OLS(excess, design).fit(
-        cov_type="HAC", cov_kwds={"maxlags": maxlags}
-    )
+    model = sm.OLS(excess, design).fit(cov_type="HAC", cov_kwds={"maxlags": maxlags})
     conf = model.conf_int()  # 95% CI per parameter, rows indexed by name
 
     means = data[factor_cols].mean()
@@ -184,10 +182,7 @@ def print_factor_report(result: dict) -> None:
             f"  WARNING: residual dof {result['residual_dof']} < {MIN_RESIDUAL_DOF}"
             " — too little history for stable betas; treat as indicative only."
         )
-    print(
-        f"  {'Factor':<10}{'Beta':>9}{'t-stat':>9}"
-        f"{'95% CI':>18}{'Ann. contrib':>14}"
-    )
+    print(f"  {'Factor':<10}{'Beta':>9}{'t-stat':>9}{'95% CI':>18}{'Ann. contrib':>14}")
     for col in result["factor_cols"]:
         b = result["betas"][col]
         star = " *" if abs(b["t"]) >= SIGNIFICANT_T else ""

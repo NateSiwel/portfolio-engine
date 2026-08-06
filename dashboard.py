@@ -370,8 +370,14 @@ def display_data(
         f_labels = [FACTOR_LABELS.get(c, c) for c in fcols]
         f_beta = [factor_result["betas"][c]["beta"] for c in fcols]
         # 95% CI as asymmetric whiskers around each beta.
-        f_ci_hi = [factor_result["betas"][c]["ci_high"] - factor_result["betas"][c]["beta"] for c in fcols]
-        f_ci_lo = [factor_result["betas"][c]["beta"] - factor_result["betas"][c]["ci_low"] for c in fcols]
+        f_ci_hi = [
+            factor_result["betas"][c]["ci_high"] - factor_result["betas"][c]["beta"]
+            for c in fcols
+        ]
+        f_ci_lo = [
+            factor_result["betas"][c]["beta"] - factor_result["betas"][c]["ci_low"]
+            for c in fcols
+        ]
         f_t = [factor_result["betas"][c]["t"] for c in fcols]
         f_contrib = [factor_result["betas"][c]["contribution"] * 100 for c in fcols]
         f_sig = [abs(t) >= SIGNIFICANT_T for t in f_t]
