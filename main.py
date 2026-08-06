@@ -23,7 +23,7 @@ def main():
     dates = sorted(holdings_calendar.keys())
 
     start = dates[0]
-    end = min(dates[-1], date.today())
+    end = date.today()
 
     priced_holdings = dense_priced_holdings_in_window(
         start, end, holdings_calendar, dates
