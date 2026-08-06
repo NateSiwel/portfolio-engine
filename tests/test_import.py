@@ -29,7 +29,7 @@ def test_split_row_quantities_and_cash(fixtures_dir):
     cal = get_investment_holdings_calendar(rows)
 
     buy = cal[date(2024, 1, 5)]
-    assert buy["NVDA"] == Decimal("2")
+    assert buy["NVDA"] == Decimal(2)
     assert buy["CASH"] == Decimal("100.00")
 
     split_day = cal[date(2024, 6, 10)]

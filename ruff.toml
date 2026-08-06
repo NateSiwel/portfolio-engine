@@ -1,0 +1,9 @@
+# Uses ruff's default rule set, with one project-wide exception.
+#
+# This app models a personal, single-timezone stock portfolio. Every date is a
+# naive local calendar date by design: transaction dates are parsed from broker
+# CSVs that carry no timezone, and "today" means the local user's calendar day.
+# The flake8-datetimez (DTZ) rules push toward timezone-aware datetimes, which
+# would be incorrect here, so that family is disabled project-wide.
+[lint]
+ignore = ["DTZ"]

@@ -3,7 +3,6 @@
 # --------------------------------------------------------------------------- #
 import csv
 import io
-
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from enum import Enum

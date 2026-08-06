@@ -77,7 +77,7 @@ def test_cost_basis_survives_split_and_prorates_sells(fixtures_dir):
     shares, cost = basis["NVDA"]
     assert shares == Decimal(15)
     # Split adds shares at no cost; selling 5 of 20 removes a quarter of it.
-    assert cost == Decimal("735")
+    assert cost == Decimal(735)
 
 
 def test_summary_yield_on_cost_and_projection(rows, events):

@@ -3,6 +3,7 @@
 Uses the project's stock_data/ cache (created on first run).
 """
 
+import itertools
 import os
 from datetime import date
 
@@ -34,7 +35,7 @@ def test_twr_is_split_neutral(split_portfolio):
     priced = dense_priced_holdings_in_window(start, end, cal, dates)
     _, port, _ = compare_to_market(priced, "SPY")
 
-    for a, b in zip(port, port[1:]):
+    for a, b in itertools.pairwise(port):
         assert 0.9 < b / a < 1.1, f"discontinuous day step {b / a:.4f}"
 
     nvda = get_price("NVDA", end, column="Adj Close") / get_price(

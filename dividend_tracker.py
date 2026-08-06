@@ -41,12 +41,12 @@ def dividend_events(normalized_rows: list[NormalizedRow]) -> pd.DataFrame:
         if symbol in CASH_SYMBOLS or symbol.strip() == "":
             symbol = "CASH"
         rows.append(
-            dict(
-                date=r.date,
-                symbol=symbol,
-                amount=float(r.amount),
-                reinvested=(r.date, r.symbol) in reinvest_keys,
-            )
+            {
+                "date": r.date,
+                "symbol": symbol,
+                "amount": float(r.amount),
+                "reinvested": (r.date, r.symbol) in reinvest_keys,
+            }
         )
     df = pd.DataFrame(rows, columns=EVENT_COLUMNS)
     df["date"] = pd.to_datetime(df["date"])
@@ -162,20 +162,20 @@ def dividend_summary(
         shares_f, cost_f = float(shares), float(cost)
         projected = shares_f * dps
         rows.append(
-            dict(
-                symbol=symbol,
-                shares=shares_f,
-                cost_basis=cost_f,
-                avg_cost=cost_f / shares_f if shares_f else float("nan"),
-                price=price,
-                value=shares_f * price,
-                ttm_dps=dps,
-                projected_income=projected,
-                yield_on_cost=projected / cost_f * 100 if cost_f else float("nan"),
-                current_yield=projected / (shares_f * price) * 100 if price else 0.0,
-                ttm_received=float(events.loc[ttm_mask, "amount"].sum()),
-                total_received=float(received.sum()),
-            )
+            {
+                "symbol": symbol,
+                "shares": shares_f,
+                "cost_basis": cost_f,
+                "avg_cost": cost_f / shares_f if shares_f else float("nan"),
+                "price": price,
+                "value": shares_f * price,
+                "ttm_dps": dps,
+                "projected_income": projected,
+                "yield_on_cost": projected / cost_f * 100 if cost_f else float("nan"),
+                "current_yield": projected / (shares_f * price) * 100 if price else 0.0,
+                "ttm_received": float(events.loc[ttm_mask, "amount"].sum()),
+                "total_received": float(received.sum()),
+            }
         )
     df = pd.DataFrame(rows, columns=SUMMARY_COLUMNS)
     return df.sort_values("projected_income", ascending=False).reset_index(drop=True)
