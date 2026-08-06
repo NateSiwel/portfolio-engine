@@ -190,7 +190,12 @@ def _load_cached(ticker: str) -> pd.DataFrame:
 def _save(ticker: str, df: pd.DataFrame, start: date, end: date) -> None:
     os.makedirs(CACHE_DIR, exist_ok=True)
     csv_path = _csv_path(ticker)
-    df.to_csv(csv_path + ".tmp", index_label="Date")
+    # Persist only the durable span [start, end]. `df` may carry a not-yet-
+    # settled today bar (kept in memory for this run) whose live price still
+    # drifts; letting it reach disk means next run's overlap check compares it
+    # against the moved price and wrongly concludes Yahoo restated the whole
+    # history, forcing a full refetch of every ticker on every run.
+    df.loc[: pd.Timestamp(end)].to_csv(csv_path + ".tmp", index_label="Date")
     os.replace(csv_path + ".tmp", csv_path)
     meta_path = _meta_path(ticker)
     with open(meta_path + ".tmp", "w") as f:
@@ -291,6 +296,14 @@ def _ensure_coverage(ticker: str, start: date, end: date) -> tuple[date, date]:
         _save(ticker, df, cov_start, durable_end)
     else:
         _set_frame(ticker, df)
+
+    # Disk meta is capped at durable_end so the NEXT process refetches an
+    # unsettled today bar, but within THIS process we've already downloaded
+    # everything up to cov_end and it's sitting in _frames. Record that full
+    # span in memory so the many call sites asking for today's price (the
+    # per-day pricing loop, each benchmark comparison, the dividend outlook)
+    # hit the fast path instead of re-downloading the tail every single time.
+    _metas[ticker] = (cov_start, cov_end)
 
     return start, end
 

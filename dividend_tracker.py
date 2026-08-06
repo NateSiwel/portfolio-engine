@@ -14,7 +14,7 @@ from typing import cast
 
 import pandas as pd
 
-from import_transactions import ActionType, NormalizedRow
+from brokerimport import ActionType, NormalizedRow
 from investment_holdings_calc import CASH_SYMBOLS, holdings_on_date
 from stock_data_cache import get_history, get_price
 

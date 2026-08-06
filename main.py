@@ -1,5 +1,6 @@
 from datetime import date
 
+from brokerimport import import_csv
 from dashboard import display_data
 from dividend_tracker import (
     audit_dividends,
@@ -7,7 +8,7 @@ from dividend_tracker import (
     dividend_summary,
     print_dividend_report,
 )
-from import_transactions import import_csv
+from factor_analysis import factor_analysis, print_factor_report
 from investment_holdings_calc import (
     audit_splits,
     compare_to_market,
@@ -40,11 +41,23 @@ def main():
         ticker: compare_to_market(priced_holdings, ticker) for ticker in ("SPY", "QQQ")
     }
 
+    # Factor exposure analysis on the portfolio's time-weighted return curve.
+    # Best-effort: a cold/blocked French download or too-short history should
+    # never sink the rest of the dashboard.
+    factor_result = None
+    try:
+        cmp_dates, port_curve, _ = comparisons["SPY"]
+        factor_result = factor_analysis(cmp_dates, port_curve)
+        print_factor_report(factor_result)
+    except Exception as exc:  # noqa: BLE001 - best-effort: any failure here must not sink the dashboard
+        print(f"Factor analysis skipped: {exc}")
+
     display_data(
         priced_holdings,
         market_comparisons=comparisons,
         dividend_events=events,
         dividend_summary=summary,
+        factor_result=factor_result,
     )
 
 
