@@ -252,11 +252,13 @@ def audit_dividends(
         ok = abs(received - expected) <= expected * threshold
         results.append((symbol, expected, received, ok))
         if not ok:
+            direction = "exceeds" if received > expected else "falls short of"
             print(
-                f"WARNING: market data implies ~${expected:,.2f} of {symbol}"
-                f" dividends over the holding period but the ledger shows"
-                f" ${received:,.2f}; dividend rows may be missing or"
-                f" misclassified."
+                f"WARNING: ledger shows ${received:,.2f} of {symbol} dividends"
+                f" over the holding period, which {direction} the ~${expected:,.2f}"
+                f" implied by market data; rows may be duplicated, missing, or"
+                f" misclassified (funds also fold in capital-gain distributions"
+                f" market data omits)."
             )
     verified = sum(1 for r in results if r[3])
     if results:
