@@ -1,11 +1,13 @@
-from import_transactions import NormalizedRow, import_csv
-from stock_data_cache import get_history, get_price
+import bisect
+import itertools
+from datetime import date, timedelta
+from decimal import Decimal
+from typing import cast
+
 import pandas as pd
 
-from datetime import date, timedelta
-from typing import cast
-from decimal import Decimal
-import bisect
+from import_transactions import NormalizedRow, import_csv
+from stock_data_cache import get_history, get_price
 
 CASH_SYMBOLS = {"SPAXX", "FDRXX", "SWVXX", "SWVYX", "SWVZX"}
 
@@ -293,7 +295,7 @@ def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):
     dates = [snaps[0][0]]
     portfolio_curve = [1.0]
     growth = 1.0
-    for (prev_date, prev), (cur_date, cur) in zip(snaps, snaps[1:]):
+    for (prev_date, prev), (cur_date, cur) in itertools.pairwise(snaps):
         prev_total = total_value(prev)
         day_return = 0.0
         if prev_total > 0:

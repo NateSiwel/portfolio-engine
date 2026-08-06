@@ -65,24 +65,24 @@ def display_data(
         for ticker, payload in holdings.items():
             if ticker == CASH_TICKER:
                 rows.append(
-                    dict(
-                        date=date,
-                        ticker=CASH_TICKER,
-                        shares=None,
-                        price=None,
-                        value=float(payload),
-                    )
+                    {
+                        "date": date,
+                        "ticker": CASH_TICKER,
+                        "shares": None,
+                        "price": None,
+                        "value": float(payload),
+                    }
                 )
             else:
                 shares, price, value = payload
                 rows.append(
-                    dict(
-                        date=date,
-                        ticker=ticker,
-                        shares=float(shares),
-                        price=float(price),
-                        value=float(value),
-                    )
+                    {
+                        "date": date,
+                        "ticker": ticker,
+                        "shares": float(shares),
+                        "price": float(price),
+                        "value": float(value),
+                    }
                 )
 
     if not rows:
@@ -142,7 +142,7 @@ def display_data(
             y=total,
             name="Total value",
             mode="lines+markers",
-            line=dict(color="#1f77b4", width=3),
+            line={"color": "#1f77b4", "width": 3},
             fill="tozeroy",
             fillcolor="rgba(31,119,180,0.12)",
             hovertemplate="%{x|%a %b %d}<br>Total: $%{y:,.2f}<extra></extra>",
@@ -175,7 +175,7 @@ def display_data(
                 name=t,
                 mode="lines",
                 stackgroup="alloc",
-                line=dict(width=0.5, color=colors[t]),
+                line={"width": 0.5, "color": colors[t]},
                 hovertemplate=f"{t}: $%{{y:,.2f}}<extra></extra>",
             )
         )
@@ -189,7 +189,7 @@ def display_data(
                 y=pct_change[t],
                 name=f"{t} %",
                 mode="lines+markers",
-                line=dict(color=colors[t], width=2.5),
+                line={"color": colors[t], "width": 2.5},
                 customdata=pivot_price[t],
                 hovertemplate=(
                     f"{t}: %{{y:+.2f}}%<br>Price: $%{{customdata:,.2f}}<extra></extra>"
@@ -208,7 +208,7 @@ def display_data(
             labels=latest.index.tolist(),
             values=latest.values,
             hole=0.45,
-            marker=dict(colors=[colors[t] for t in latest.index]),
+            marker={"colors": [colors[t] for t in latest.index]},
             textinfo="label+percent",
             hovertemplate="%{label}: $%{value:,.2f} (%{percent})<extra></extra>",
             visible=False,
@@ -227,7 +227,7 @@ def display_data(
                 y=[(g - 1) * 100 for g in port_curve],
                 name="Portfolio (TWR)",
                 mode="lines",
-                line=dict(color="#1f77b4", width=3),
+                line={"color": "#1f77b4", "width": 3},
                 hovertemplate="Portfolio: %{y:+.2f}%<extra></extra>",
             )
         )
@@ -242,11 +242,11 @@ def display_data(
                     y=[(g - 1) * 100 for g in bench_curve],
                     name=ticker,
                     mode="lines",
-                    line=dict(
-                        color=BENCH_COLORS[i % len(BENCH_COLORS)],
-                        width=2,
-                        dash="dash",
-                    ),
+                    line={
+                        "color": BENCH_COLORS[i % len(BENCH_COLORS)],
+                        "width": 2,
+                        "dash": "dash",
+                    },
                     hovertemplate=f"{ticker}: %{{y:+.2f}}%<extra></extra>",
                 )
             )
@@ -285,7 +285,7 @@ def display_data(
                 y=monthly["Total"].cumsum(),
                 name="Cumulative",
                 mode="lines+markers",
-                line=dict(color="#1f77b4", width=2.5, dash="dot"),
+                line={"color": "#1f77b4", "width": 2.5, "dash": "dot"},
                 hovertemplate="Cumulative: $%{y:,.2f}<extra></extra>",
             ),
             secondary_y=True,
@@ -353,50 +353,50 @@ def display_data(
         return [g == view for g in groups]
 
     axis_layouts = {
-        0: dict(
-            xaxis=dict(visible=True),
-            yaxis=dict(visible=True, title="Portfolio value ($)"),
-            yaxis2=dict(visible=True, title="Daily change ($)"),
-            title="Total Portfolio Value",
-        ),
-        1: dict(
-            xaxis=dict(visible=True),
-            yaxis=dict(visible=True, title="Value ($)"),
-            yaxis2=dict(visible=False),
-            title="Allocation Over Time (stacked)",
-        ),
-        2: dict(
-            xaxis=dict(visible=True),
-            yaxis=dict(visible=True, title=f"% change since {dates[0]:%b %d}"),
-            yaxis2=dict(visible=False),
-            title="Price Performance (indexed)",
-        ),
-        3: dict(
-            xaxis=dict(visible=False),
-            yaxis=dict(visible=False),
-            yaxis2=dict(visible=False),
-            title=f"Current Allocation — {dates[-1]:%b %d, %Y}",
-        ),
-        4: dict(
-            xaxis=dict(visible=True),
-            yaxis=dict(visible=True, title="Return (%)"),
-            yaxis2=dict(visible=False),
-            title="Portfolio vs Market — time-weighted, contributions excluded",
-        ),
-        5: dict(
-            xaxis=dict(visible=True),
-            yaxis=dict(visible=True, title="Dividend income ($/month)"),
-            yaxis2=dict(visible=True, title="Cumulative ($)"),
-            title="Dividend Income by Month",
-        ),
-        6: dict(
-            xaxis=dict(visible=False),
-            yaxis=dict(visible=False),
-            yaxis2=dict(visible=False),
-            xaxis2=True,
-            yaxis3=True,
-            hovermode="closest",
-            title=(
+        0: {
+            "xaxis": {"visible": True},
+            "yaxis": {"visible": True, "title": "Portfolio value ($)"},
+            "yaxis2": {"visible": True, "title": "Daily change ($)"},
+            "title": "Total Portfolio Value",
+        },
+        1: {
+            "xaxis": {"visible": True},
+            "yaxis": {"visible": True, "title": "Value ($)"},
+            "yaxis2": {"visible": False},
+            "title": "Allocation Over Time (stacked)",
+        },
+        2: {
+            "xaxis": {"visible": True},
+            "yaxis": {"visible": True, "title": f"% change since {dates[0]:%b %d}"},
+            "yaxis2": {"visible": False},
+            "title": "Price Performance (indexed)",
+        },
+        3: {
+            "xaxis": {"visible": False},
+            "yaxis": {"visible": False},
+            "yaxis2": {"visible": False},
+            "title": f"Current Allocation — {dates[-1]:%b %d, %Y}",
+        },
+        4: {
+            "xaxis": {"visible": True},
+            "yaxis": {"visible": True, "title": "Return (%)"},
+            "yaxis2": {"visible": False},
+            "title": "Portfolio vs Market — time-weighted, contributions excluded",
+        },
+        5: {
+            "xaxis": {"visible": True},
+            "yaxis": {"visible": True, "title": "Dividend income ($/month)"},
+            "yaxis2": {"visible": True, "title": "Cumulative ($)"},
+            "title": "Dividend Income by Month",
+        },
+        6: {
+            "xaxis": {"visible": False},
+            "yaxis": {"visible": False},
+            "yaxis2": {"visible": False},
+            "xaxis2": True,
+            "yaxis3": True,
+            "hovermode": "closest",
+            "title": (
                 "Dividend Outlook — trailing-12-month rate × current shares"
                 + (
                     f" (proj. ${proj_total:,.2f}/yr"
@@ -409,7 +409,7 @@ def display_data(
                     else ""
                 )
             ),
-        ),
+        },
     }
 
     view_labels = [
@@ -434,10 +434,10 @@ def display_data(
     for view, label in view_labels:
         lay = axis_layouts[view]
         buttons.append(
-            dict(
-                label=label,
-                method="update",
-                args=[
+            {
+                "label": label,
+                "method": "update",
+                "args": [
                     {"visible": vis(view)},
                     {
                         "title.text": lay["title"],
@@ -457,7 +457,7 @@ def display_data(
                         "yaxis.tickprefix": "" if view in (2, 4) else "$",
                     },
                 ],
-            )
+            }
         )
 
     # start on view 0
@@ -466,58 +466,59 @@ def display_data(
 
     fig.update_layout(
         template="plotly_white",
-        title=dict(text=axis_layouts[0]["title"], x=0.5, font=dict(size=22)),
+        title={"text": axis_layouts[0]["title"], "x": 0.5, "font": {"size": 22}},
         hovermode="x unified",
         barmode="stack",  # stacks the per-ticker dividend bars; other views
         # have at most one bar trace, so they're unaffected
         height=640,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "x": 0},
         updatemenus=[
-            dict(
-                type="buttons",
-                direction="right",
-                active=0,
-                buttons=buttons,
-                x=0.5,
-                xanchor="center",
-                y=1.18,
-                yanchor="top",
-                bgcolor="#f0f0f0",
-                bordercolor="#cccccc",
-            )
+            {
+                "type": "buttons",
+                "direction": "right",
+                "active": 0,
+                "buttons": buttons,
+                "x": 0.5,
+                "xanchor": "center",
+                "y": 1.18,
+                "yanchor": "top",
+                "bgcolor": "#f0f0f0",
+                "bordercolor": "#cccccc",
+            }
         ],
-        xaxis=dict(
-            title="Date",
-            rangeslider=dict(visible=True, thickness=0.08),
-            rangeselector=dict(
-                buttons=[
-                    dict(count=3, label="3d", step="day", stepmode="backward"),
-                    dict(count=7, label="1w", step="day", stepmode="backward"),
-                    dict(step="all", label="All"),
+        xaxis={
+            "title": "Date",
+            "rangeslider": {"visible": True, "thickness": 0.08},
+            "rangeselector": {
+                "buttons": [
+                    {"count": 3, "label": "3d", "step": "day", "stepmode": "backward"},
+                    {"count": 7, "label": "1w", "step": "day", "stepmode": "backward"},
+                    {"step": "all", "label": "All"},
                 ]
-            ),
-        ),
-        yaxis=dict(title="Portfolio value ($)", tickprefix="$", tickformat=",.0f"),
-        yaxis2=dict(title="Daily change ($)", showgrid=False),
+            },
+        },
+        yaxis={"title": "Portfolio value ($)", "tickprefix": "$", "tickformat": ",.0f"},
+        yaxis2={"title": "Daily change ($)", "showgrid": False},
         # Overlaid axis pair for the dividend-outlook bars: the shared xaxis
         # is date-typed, so dollar-valued horizontal bars need their own axes.
-        xaxis2=dict(
-            overlaying="x",
-            visible=False,
-            title="Projected annual income ($)",
-            tickprefix="$",
-        ),
+        xaxis2={
+            "overlaying": "x",
+            "visible": False,
+            "title": "Projected annual income ($)",
+            "tickprefix": "$",
+        },
         # No categoryorder here: "total ascending" crashes plotly.js while the
         # axis's only trace is hidden, so the data is pre-sorted instead.
-        yaxis3=dict(overlaying="y", visible=False, type="category"),
-        margin=dict(t=140),
+        yaxis3={"overlaying": "y", "visible": False, "type": "category"},
+        margin={"t": 140},
     )
 
     fig.write_html(output_path, include_plotlyjs="cdn", full_html=True)
     try:
         fig.show()
-    except Exception:
-        pass  # no interactive renderer available; the HTML file is still saved
+    except Exception:  # noqa: BLE001, S110 -- best-effort display; any renderer
+        # failure is fine here because the HTML file above is already saved.
+        pass
     print(f"Saved {output_path}")
     print(
         f"Total value on {dates[-1]:%b %d}: ${total.iloc[-1]:,.2f} "

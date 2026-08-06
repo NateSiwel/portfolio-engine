@@ -22,13 +22,20 @@ deleted.
 
 import json
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import cast
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
 CACHE_DIR = "stock_data"
+
+# The regular US equity session closes at 16:00 ET. Yahoo's final daily bar
+# can lag the bell (late/consolidated prints) by a few minutes, so today's
+# close is only treated as settled >= 15 minutes after market close
+_MARKET_TZ = ZoneInfo("America/New_York")
+_SETTLE_TIME = time(16, 15)
 
 # Windows device names that would otherwise survive percent-encoding untouched
 # and resolve to devices instead of files (e.g. NUL.csv).
@@ -193,6 +200,16 @@ def _save(ticker: str, df: pd.DataFrame, start: date, end: date) -> None:
     _metas[ticker] = (start, end)
 
 
+def _today_bar_final(today: date) -> bool:
+    """True once today's regular session has closed and its daily bar has
+    settled, judged in market time. A fixed post-close threshold is safe on
+    early-close half-days too, since the real close is never later than this.
+    """
+    return datetime.now(_MARKET_TZ) >= datetime.combine(
+        today, _SETTLE_TIME, tzinfo=_MARKET_TZ
+    )
+
+
 def _ensure_coverage(ticker: str, start: date, end: date) -> tuple[date, date]:
     """Make [start, end] covered, downloading/merging only the missing part.
 
@@ -260,9 +277,16 @@ def _ensure_coverage(ticker: str, start: date, end: date) -> tuple[date, date]:
             cov_start = min(start, cov_start)
             cov_end = max(end, cov_end)
 
-    # Today's bar is never marked as durably covered: its close can still
-    # change, so the next run refreshes it.
-    durable_end = min(cov_end, today - timedelta(days=1))
+    # Today's bar is marked durable only once the session has closed and
+    # settled; before that its close can still change, so exclude it and let
+    # the next run refresh it.
+    market_today = datetime.now(_MARKET_TZ).date()
+    last_final = (
+        market_today
+        if _today_bar_final(market_today)
+        else market_today - timedelta(days=1)
+    )
+    durable_end = min(cov_end, last_final)
     if durable_end >= cov_start and (downloaded or (cov_start, durable_end) != covered):
         _save(ticker, df, cov_start, durable_end)
     else:

@@ -3,9 +3,8 @@
 # --------------------------------------------------------------------------- #
 import csv
 import io
-
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from enum import Enum
 
 
@@ -183,9 +182,24 @@ def _adapter(bank) -> BankAdapter:
 
 
 def get_idempotent_key(row, bank, account_name):
-    """Return a unique key for a transaction row based on the bank and account name."""
+    """Return a unique key for a transaction row based on the bank and account name.
+
+    Numeric key columns are canonicalized (Decimal-normalized) so that the same
+    transaction keys identically across export-format changes — e.g. Fidelity
+    writes a cash dividend's Quantity as "0.000" in one export and "0" in
+    another, and without this a re-exported row would slip past dedup and be
+    double-counted. Non-numeric columns (dates, action text, symbols) never
+    parse as Decimal and pass through unchanged.
+    """
     adapter = _adapter(bank)
-    key_values = [row.get(prop, "").strip() for prop in adapter.key_columns]
+    key_values = []
+    for prop in adapter.key_columns:
+        val = row.get(prop, "").strip()
+        try:
+            val = format(Decimal(val).normalize(), "f")
+        except InvalidOperation:
+            pass
+        key_values.append(val)
     return f"{bank}:{account_name}:" + ":".join(key_values)
 
 
