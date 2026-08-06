@@ -6,3 +6,4 @@ csvs/*
 __pycache__
 portfolio_dashboard.html
 CLAUDE.md
+factor_data/*
