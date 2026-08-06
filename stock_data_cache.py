@@ -280,7 +280,12 @@ def _ensure_coverage(ticker: str, start: date, end: date) -> tuple[date, date]:
     # Today's bar is marked durable only once the session has closed and
     # settled; before that its close can still change, so exclude it and let
     # the next run refresh it.
-    last_final = today if _today_bar_final(today) else today - timedelta(days=1)
+    market_today = datetime.now(_MARKET_TZ).date()
+    last_final = (
+        market_today
+        if _today_bar_final(market_today)
+        else market_today - timedelta(days=1)
+    )
     durable_end = min(cov_end, last_final)
     if durable_end >= cov_start and (downloaded or (cov_start, durable_end) != covered):
         _save(ticker, df, cov_start, durable_end)
