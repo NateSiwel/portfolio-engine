@@ -198,7 +198,7 @@ def _ensure_coverage(ticker: str, start: date, end: date) -> tuple[date, date]:
 
     Returns the (start, end) actually usable, with `end` clamped to today.
     """
-    today = date.today()
+    today = date.today()  # noqa: DTZ011 - local calendar date is the intended "today"
     end = min(end, today)
     if start > end:
         raise ValueError(f"start {start} is after end {end}")

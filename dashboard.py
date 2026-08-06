@@ -12,6 +12,8 @@ All tickers, colors, orderings, and date labels are derived from the
 data at runtime — nothing portfolio-specific is hardcoded.
 """
 
+import pathlib
+
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -42,6 +44,7 @@ def display_data(
     market_comparisons=None,
     dividend_events=None,
     dividend_summary=None,
+    factor_result=None,
 ):
     """Render the dashboard.
 
@@ -53,6 +56,11 @@ def display_data(
     dividend_tracker.dividend_events / dividend_summary; add a monthly
     dividend income view and a per-ticker outlook view (projected forward
     income bars, yield-on-cost and the rest of the metrics on hover).
+
+    factor_result: optional dict from factor_analysis.factor_analysis; appends
+    a factor exposure section (regression table + betas chart) below the main
+    figure. It's a categorical chart, so it lives in its own div rather than on
+    the date-axis toggle above.
     """
     # ---------------------------------------------------------------------------
     # Reshape into a tidy DataFrame: one row per (date, holding)
@@ -65,24 +73,24 @@ def display_data(
         for ticker, payload in holdings.items():
             if ticker == CASH_TICKER:
                 rows.append(
-                    dict(
-                        date=date,
-                        ticker=CASH_TICKER,
-                        shares=None,
-                        price=None,
-                        value=float(payload),
-                    )
+                    {
+                        "date": date,
+                        "ticker": CASH_TICKER,
+                        "shares": None,
+                        "price": None,
+                        "value": float(payload),
+                    }
                 )
             else:
                 shares, price, value = payload
                 rows.append(
-                    dict(
-                        date=date,
-                        ticker=ticker,
-                        shares=float(shares),
-                        price=float(price),
-                        value=float(value),
-                    )
+                    {
+                        "date": date,
+                        "ticker": ticker,
+                        "shares": float(shares),
+                        "price": float(price),
+                        "value": float(value),
+                    }
                 )
 
     if not rows:
@@ -142,7 +150,7 @@ def display_data(
             y=total,
             name="Total value",
             mode="lines+markers",
-            line=dict(color="#1f77b4", width=3),
+            line={"color": "#1f77b4", "width": 3},
             fill="tozeroy",
             fillcolor="rgba(31,119,180,0.12)",
             hovertemplate="%{x|%a %b %d}<br>Total: $%{y:,.2f}<extra></extra>",
@@ -175,7 +183,7 @@ def display_data(
                 name=t,
                 mode="lines",
                 stackgroup="alloc",
-                line=dict(width=0.5, color=colors[t]),
+                line={"width": 0.5, "color": colors[t]},
                 hovertemplate=f"{t}: $%{{y:,.2f}}<extra></extra>",
             )
         )
@@ -189,7 +197,7 @@ def display_data(
                 y=pct_change[t],
                 name=f"{t} %",
                 mode="lines+markers",
-                line=dict(color=colors[t], width=2.5),
+                line={"color": colors[t], "width": 2.5},
                 customdata=pivot_price[t],
                 hovertemplate=(
                     f"{t}: %{{y:+.2f}}%<br>Price: $%{{customdata:,.2f}}<extra></extra>"
@@ -208,7 +216,7 @@ def display_data(
             labels=latest.index.tolist(),
             values=latest.values,
             hole=0.45,
-            marker=dict(colors=[colors[t] for t in latest.index]),
+            marker={"colors": [colors[t] for t in latest.index]},
             textinfo="label+percent",
             hovertemplate="%{label}: $%{value:,.2f} (%{percent})<extra></extra>",
             visible=False,
@@ -227,7 +235,7 @@ def display_data(
                 y=[(g - 1) * 100 for g in port_curve],
                 name="Portfolio (TWR)",
                 mode="lines",
-                line=dict(color="#1f77b4", width=3),
+                line={"color": "#1f77b4", "width": 3},
                 hovertemplate="Portfolio: %{y:+.2f}%<extra></extra>",
             )
         )
@@ -242,11 +250,11 @@ def display_data(
                     y=[(g - 1) * 100 for g in bench_curve],
                     name=ticker,
                     mode="lines",
-                    line=dict(
-                        color=BENCH_COLORS[i % len(BENCH_COLORS)],
-                        width=2,
-                        dash="dash",
-                    ),
+                    line={
+                        "color": BENCH_COLORS[i % len(BENCH_COLORS)],
+                        "width": 2,
+                        "dash": "dash",
+                    },
                     hovertemplate=f"{ticker}: %{{y:+.2f}}%<extra></extra>",
                 )
             )
@@ -285,7 +293,7 @@ def display_data(
                 y=monthly["Total"].cumsum(),
                 name="Cumulative",
                 mode="lines+markers",
-                line=dict(color="#1f77b4", width=2.5, dash="dot"),
+                line={"color": "#1f77b4", "width": 2.5, "dash": "dot"},
                 hovertemplate="Cumulative: $%{y:,.2f}<extra></extra>",
             ),
             secondary_y=True,
@@ -349,54 +357,144 @@ def display_data(
         )
         groups.append(6)
 
+    # --- View 7: factor exposure (regression betas) ----------------------------
+    # Horizontal bars on a dedicated overlaid axis pair (xaxis3/yaxis4). Like
+    # the dividend outlook the shared xaxis is date-typed; giving the factors
+    # their own axes (not the dividend xaxis2/yaxis3) keeps the two categorical
+    # views from bleeding ghost ticks into each other.
+    has_factor = factor_result is not None
+    if has_factor:
+        from factor_analysis import FACTOR_LABELS, SIGNIFICANT_T
+
+        fcols = factor_result["factor_cols"]
+        f_labels = [FACTOR_LABELS.get(c, c) for c in fcols]
+        f_beta = [factor_result["betas"][c]["beta"] for c in fcols]
+        f_se = [factor_result["betas"][c]["se"] for c in fcols]
+        f_t = [factor_result["betas"][c]["t"] for c in fcols]
+        f_contrib = [factor_result["betas"][c]["contribution"] * 100 for c in fcols]
+        f_sig = [abs(t) >= SIGNIFICANT_T for t in f_t]
+        # Solid = statistically significant at 95%; faded = not distinguishable
+        # from zero exposure.
+        fig.add_trace(
+            go.Bar(
+                x=f_beta,
+                y=f_labels,
+                orientation="h",
+                name="Factor beta",
+                marker_color=[
+                    "#1f77b4" if s else "rgba(31,119,180,0.35)" for s in f_sig
+                ],
+                marker_line={"color": "#1f77b4", "width": 1},
+                error_x={
+                    "type": "data",
+                    "array": f_se,
+                    "color": "rgba(0,0,0,0.4)",
+                    "thickness": 1.3,
+                    "width": 4,
+                },
+                text=[f"{b:+.2f}{' ✳' if s else ''}" for b, s in zip(f_beta, f_sig)],
+                textposition="outside",
+                textfont={"size": 12},
+                cliponaxis=False,
+                customdata=list(zip(f_t, f_contrib)),
+                hovertemplate=(
+                    "%{y}<br>β %{x:.3f}  (t %{customdata[0]:.2f})<br>"
+                    "annualized contribution %{customdata[1]:+.2f}%<extra></extra>"
+                ),
+                xaxis="x3",
+                yaxis="y4",
+                showlegend=False,
+                visible=False,
+            )
+        )
+        groups.append(7)
+
+    # Alpha is a return (%/yr), not an exposure, so it can't be a bar on the
+    # beta axis — it gets its own callout box, shown only in the factor view.
+    alpha_ann_idx = None
+    factor_title = ""
+    if has_factor:
+        warn = " · ⚠ small sample" if factor_result["underpowered"] else ""
+        factor_title = (
+            "Factor Exposure — portfolio β to Fama-French + momentum"
+            "<br><span style='font-size:13px;color:#888'>"
+            f"R² {factor_result['r_squared']:.2f} · "
+            f"{factor_result['n']} monthly returns · "
+            f"solid bar = 95% significant{warn}</span>"
+        )
+        alpha_sig = abs(factor_result["alpha_t"]) >= SIGNIFICANT_T
+        alpha_ann_idx = len(fig.layout.annotations)
+        fig.add_annotation(
+            xref="paper",
+            yref="paper",
+            x=0.98,
+            y=0.06,
+            xanchor="right",
+            yanchor="bottom",
+            align="right",
+            text=(
+                f"<b>Alpha (annualized): "
+                f"{factor_result['alpha_annual'] * 100:+.1f}%/yr</b><br>"
+                f"t = {factor_result['alpha_t']:.2f} — "
+                f"{'significant' if alpha_sig else 'not significant'} at 95%"
+            ),
+            showarrow=False,
+            bordercolor="#1f77b4",
+            borderwidth=1,
+            borderpad=8,
+            bgcolor="rgba(255,255,255,0.92)",
+            font={"size": 13, "color": "#333"},
+            visible=False,  # toggled on only for the factor view (below)
+        )
+
     def vis(view):
         return [g == view for g in groups]
 
     axis_layouts = {
-        0: dict(
-            xaxis=dict(visible=True),
-            yaxis=dict(visible=True, title="Portfolio value ($)"),
-            yaxis2=dict(visible=True, title="Daily change ($)"),
-            title="Total Portfolio Value",
-        ),
-        1: dict(
-            xaxis=dict(visible=True),
-            yaxis=dict(visible=True, title="Value ($)"),
-            yaxis2=dict(visible=False),
-            title="Allocation Over Time (stacked)",
-        ),
-        2: dict(
-            xaxis=dict(visible=True),
-            yaxis=dict(visible=True, title=f"% change since {dates[0]:%b %d}"),
-            yaxis2=dict(visible=False),
-            title="Price Performance (indexed)",
-        ),
-        3: dict(
-            xaxis=dict(visible=False),
-            yaxis=dict(visible=False),
-            yaxis2=dict(visible=False),
-            title=f"Current Allocation — {dates[-1]:%b %d, %Y}",
-        ),
-        4: dict(
-            xaxis=dict(visible=True),
-            yaxis=dict(visible=True, title="Return (%)"),
-            yaxis2=dict(visible=False),
-            title="Portfolio vs Market — time-weighted, contributions excluded",
-        ),
-        5: dict(
-            xaxis=dict(visible=True),
-            yaxis=dict(visible=True, title="Dividend income ($/month)"),
-            yaxis2=dict(visible=True, title="Cumulative ($)"),
-            title="Dividend Income by Month",
-        ),
-        6: dict(
-            xaxis=dict(visible=False),
-            yaxis=dict(visible=False),
-            yaxis2=dict(visible=False),
-            xaxis2=True,
-            yaxis3=True,
-            hovermode="closest",
-            title=(
+        0: {
+            "xaxis": {"visible": True},
+            "yaxis": {"visible": True, "title": "Portfolio value ($)"},
+            "yaxis2": {"visible": True, "title": "Daily change ($)"},
+            "title": "Total Portfolio Value",
+        },
+        1: {
+            "xaxis": {"visible": True},
+            "yaxis": {"visible": True, "title": "Value ($)"},
+            "yaxis2": {"visible": False},
+            "title": "Allocation Over Time (stacked)",
+        },
+        2: {
+            "xaxis": {"visible": True},
+            "yaxis": {"visible": True, "title": f"% change since {dates[0]:%b %d}"},
+            "yaxis2": {"visible": False},
+            "title": "Price Performance (indexed)",
+        },
+        3: {
+            "xaxis": {"visible": False},
+            "yaxis": {"visible": False},
+            "yaxis2": {"visible": False},
+            "title": f"Current Allocation — {dates[-1]:%b %d, %Y}",
+        },
+        4: {
+            "xaxis": {"visible": True},
+            "yaxis": {"visible": True, "title": "Return (%)"},
+            "yaxis2": {"visible": False},
+            "title": "Portfolio vs Market — time-weighted, contributions excluded",
+        },
+        5: {
+            "xaxis": {"visible": True},
+            "yaxis": {"visible": True, "title": "Dividend income ($/month)"},
+            "yaxis2": {"visible": True, "title": "Cumulative ($)"},
+            "title": "Dividend Income by Month",
+        },
+        6: {
+            "xaxis": {"visible": False},
+            "yaxis": {"visible": False},
+            "yaxis2": {"visible": False},
+            "xaxis2": True,
+            "yaxis3": True,
+            "hovermode": "closest",
+            "title": (
                 "Dividend Outlook — trailing-12-month rate × current shares"
                 + (
                     f" (proj. ${proj_total:,.2f}/yr"
@@ -409,7 +507,16 @@ def display_data(
                     else ""
                 )
             ),
-        ),
+        },
+        7: {
+            "xaxis": {"visible": False},
+            "yaxis": {"visible": False},
+            "yaxis2": {"visible": False},
+            "xaxis3": True,
+            "yaxis4": True,
+            "hovermode": "closest",
+            "title": factor_title,
+        },
     }
 
     view_labels = [
@@ -420,6 +527,7 @@ def display_data(
         (4, "vs Market"),
         (5, "Dividend income"),
         (6, "Dividend outlook"),
+        (7, "Factor exposure"),
     ]
     if not price_tickers:  # cash-only portfolio
         view_labels = [v for v in view_labels if v[0] != 2]
@@ -429,35 +537,40 @@ def display_data(
         view_labels = [v for v in view_labels if v[0] != 5]
     if not has_div_summary:
         view_labels = [v for v in view_labels if v[0] != 6]
+    if not has_factor:
+        view_labels = [v for v in view_labels if v[0] != 7]
 
     buttons = []
     for view, label in view_labels:
         lay = axis_layouts[view]
+        relayout = {
+            "title.text": lay["title"],
+            "xaxis.visible": lay["xaxis"]["visible"],
+            "yaxis.visible": lay["yaxis"]["visible"],
+            "yaxis.title.text": lay["yaxis"].get("title", ""),
+            "yaxis2.visible": lay["yaxis2"]["visible"],
+            "yaxis2.title.text": lay["yaxis2"].get("title", ""),
+            "xaxis2.visible": lay.get("xaxis2", False),
+            "yaxis3.visible": lay.get("yaxis3", False),
+            "xaxis3.visible": lay.get("xaxis3", False),
+            "yaxis4.visible": lay.get("yaxis4", False),
+            "hovermode": lay.get("hovermode", "x unified"),
+            # Hiding the axis doesn't hide its rangeslider, and the
+            # % change zero-line shape shows everywhere otherwise.
+            "xaxis.rangeslider.visible": lay["xaxis"]["visible"],
+            "shapes[0].visible": view in (2, 4),
+            # % views (2, 4) shouldn't inherit view 0's $ prefix.
+            "yaxis.tickprefix": "" if view in (2, 4) else "$",
+        }
+        # The alpha callout belongs only to the factor view.
+        if alpha_ann_idx is not None:
+            relayout[f"annotations[{alpha_ann_idx}].visible"] = view == 7
         buttons.append(
-            dict(
-                label=label,
-                method="update",
-                args=[
-                    {"visible": vis(view)},
-                    {
-                        "title.text": lay["title"],
-                        "xaxis.visible": lay["xaxis"]["visible"],
-                        "yaxis.visible": lay["yaxis"]["visible"],
-                        "yaxis.title.text": lay["yaxis"].get("title", ""),
-                        "yaxis2.visible": lay["yaxis2"]["visible"],
-                        "yaxis2.title.text": lay["yaxis2"].get("title", ""),
-                        "xaxis2.visible": lay.get("xaxis2", False),
-                        "yaxis3.visible": lay.get("yaxis3", False),
-                        "hovermode": lay.get("hovermode", "x unified"),
-                        # Hiding the axis doesn't hide its rangeslider, and the
-                        # % change zero-line shape shows everywhere otherwise.
-                        "xaxis.rangeslider.visible": lay["xaxis"]["visible"],
-                        "shapes[0].visible": view in (2, 4),
-                        # % views (2, 4) shouldn't inherit view 0's $ prefix.
-                        "yaxis.tickprefix": "" if view in (2, 4) else "$",
-                    },
-                ],
-            )
+            {
+                "label": label,
+                "method": "update",
+                "args": [{"visible": vis(view)}, relayout],
+            }
         )
 
     # start on view 0
@@ -466,58 +579,77 @@ def display_data(
 
     fig.update_layout(
         template="plotly_white",
-        title=dict(text=axis_layouts[0]["title"], x=0.5, font=dict(size=22)),
+        title={"text": axis_layouts[0]["title"], "x": 0.5, "font": {"size": 22}},
         hovermode="x unified",
         barmode="stack",  # stacks the per-ticker dividend bars; other views
         # have at most one bar trace, so they're unaffected
         height=640,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "x": 0},
         updatemenus=[
-            dict(
-                type="buttons",
-                direction="right",
-                active=0,
-                buttons=buttons,
-                x=0.5,
-                xanchor="center",
-                y=1.18,
-                yanchor="top",
-                bgcolor="#f0f0f0",
-                bordercolor="#cccccc",
-            )
+            {
+                "type": "buttons",
+                "direction": "right",
+                "active": 0,
+                "buttons": buttons,
+                "x": 0.5,
+                "xanchor": "center",
+                "y": 1.18,
+                "yanchor": "top",
+                "bgcolor": "#f0f0f0",
+                "bordercolor": "#cccccc",
+            }
         ],
-        xaxis=dict(
-            title="Date",
-            rangeslider=dict(visible=True, thickness=0.08),
-            rangeselector=dict(
-                buttons=[
-                    dict(count=3, label="3d", step="day", stepmode="backward"),
-                    dict(count=7, label="1w", step="day", stepmode="backward"),
-                    dict(step="all", label="All"),
+        xaxis={
+            "title": "Date",
+            "rangeslider": {"visible": True, "thickness": 0.08},
+            "rangeselector": {
+                "buttons": [
+                    {"count": 3, "label": "3d", "step": "day", "stepmode": "backward"},
+                    {"count": 7, "label": "1w", "step": "day", "stepmode": "backward"},
+                    {"step": "all", "label": "All"},
                 ]
-            ),
-        ),
-        yaxis=dict(title="Portfolio value ($)", tickprefix="$", tickformat=",.0f"),
-        yaxis2=dict(title="Daily change ($)", showgrid=False),
+            },
+        },
+        yaxis={"title": "Portfolio value ($)", "tickprefix": "$", "tickformat": ",.0f"},
+        yaxis2={"title": "Daily change ($)", "showgrid": False},
         # Overlaid axis pair for the dividend-outlook bars: the shared xaxis
         # is date-typed, so dollar-valued horizontal bars need their own axes.
-        xaxis2=dict(
-            overlaying="x",
-            visible=False,
-            title="Projected annual income ($)",
-            tickprefix="$",
-        ),
+        xaxis2={
+            "overlaying": "x",
+            "visible": False,
+            "title": "Projected annual income ($)",
+            "tickprefix": "$",
+        },
         # No categoryorder here: "total ascending" crashes plotly.js while the
         # axis's only trace is hidden, so the data is pre-sorted instead.
-        yaxis3=dict(overlaying="y", visible=False, type="category"),
-        margin=dict(t=140),
+        yaxis3={"overlaying": "y", "visible": False, "type": "category"},
+        # Factor-exposure view's own overlaid axes: numeric beta across,
+        # factor names down. Reversed so the first factor (Market) sits on top.
+        xaxis3={
+            "overlaying": "x",
+            "visible": False,
+            "title": "Beta (exposure)",
+            "zeroline": True,
+            "zerolinecolor": "#bbbbbb",
+        },
+        yaxis4={
+            "overlaying": "y",
+            "visible": False,
+            "type": "category",
+            "autorange": "reversed",
+        },
+        margin={"t": 140},
     )
 
     fig.write_html(output_path, include_plotlyjs="cdn", full_html=True)
+    # Open the saved file, not fig.show(): fig.show() renders only the plotly
+    # figure object, so anything written into the file around it wouldn't appear.
     try:
-        fig.show()
-    except Exception:
-        pass  # no interactive renderer available; the HTML file is still saved
+        import webbrowser
+
+        webbrowser.open(pathlib.Path(output_path).resolve().as_uri())
+    except Exception:  # noqa: BLE001, S110 - opening a browser is best-effort; the HTML file is still saved
+        pass
     print(f"Saved {output_path}")
     print(
         f"Total value on {dates[-1]:%b %d}: ${total.iloc[-1]:,.2f} "

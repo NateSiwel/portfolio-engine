@@ -1,11 +1,13 @@
-from import_transactions import NormalizedRow, import_csv
-from stock_data_cache import get_history, get_price
+import bisect
+import itertools
+from datetime import date, timedelta
+from decimal import Decimal
+from typing import cast
+
 import pandas as pd
 
-from datetime import date, timedelta
-from typing import cast
-from decimal import Decimal
-import bisect
+from import_transactions import NormalizedRow, import_csv
+from stock_data_cache import get_history, get_price
 
 CASH_SYMBOLS = {"SPAXX", "FDRXX", "SWVXX", "SWVYX", "SWVZX"}
 
@@ -199,7 +201,8 @@ def audit_splits(
         else:
             last_held = held_dates[-1] + timedelta(days=tolerance_days)
         try:
-            hist = get_history(symbol, first_held, min(last_held, end, date.today()))
+            asof = min(last_held, end, date.today())  # noqa: DTZ011 - local calendar date is the intended "today"
+            hist = get_history(symbol, first_held, asof)
         except ValueError:
             continue  # no market data; pricing already surfaces this
         if "Stock Splits" not in hist.columns:
@@ -293,7 +296,7 @@ def compare_to_market(priced_holdings, benchmark_ticker: str = "SPY"):
     dates = [snaps[0][0]]
     portfolio_curve = [1.0]
     growth = 1.0
-    for (prev_date, prev), (cur_date, cur) in zip(snaps, snaps[1:]):
+    for (prev_date, prev), (cur_date, cur) in itertools.pairwise(snaps):
         prev_total = total_value(prev)
         day_return = 0.0
         if prev_total > 0:

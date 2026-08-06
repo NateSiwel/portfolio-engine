@@ -41,12 +41,12 @@ def dividend_events(normalized_rows: list[NormalizedRow]) -> pd.DataFrame:
         if symbol in CASH_SYMBOLS or symbol.strip() == "":
             symbol = "CASH"
         rows.append(
-            dict(
-                date=r.date,
-                symbol=symbol,
-                amount=float(r.amount),
-                reinvested=(r.date, r.symbol) in reinvest_keys,
-            )
+            {
+                "date": r.date,
+                "symbol": symbol,
+                "amount": float(r.amount),
+                "reinvested": (r.date, r.symbol) in reinvest_keys,
+            }
         )
     df = pd.DataFrame(rows, columns=EVENT_COLUMNS)
     df["date"] = pd.to_datetime(df["date"])
@@ -115,7 +115,8 @@ def ttm_dividends_per_share(ticker: str, asof: date) -> float:
     today's share count — multiply by current shares for a trailing-rate
     income projection.
     """
-    hist = get_history(ticker, asof - timedelta(days=365), min(asof, date.today()))
+    end = min(asof, date.today())  # noqa: DTZ011 - local calendar date is the intended "today"
+    hist = get_history(ticker, asof - timedelta(days=365), end)
     if "Dividends" not in hist.columns:
         return 0.0
     return float(hist["Dividends"].sum())
@@ -148,7 +149,7 @@ def dividend_summary(
     average cost basis and market value, in percent. Sorted by projection,
     so non-payers sink to the bottom rather than disappearing.
     """
-    asof = min(asof, date.today())
+    asof = min(asof, date.today())  # noqa: DTZ011 - local calendar date is the intended "today"
     rows = []
     cutoff = pd.Timestamp(asof) - pd.Timedelta(days=365)
     for symbol, (shares, cost) in sorted(cost_basis_by_ticker(normalized_rows).items()):
@@ -162,20 +163,20 @@ def dividend_summary(
         shares_f, cost_f = float(shares), float(cost)
         projected = shares_f * dps
         rows.append(
-            dict(
-                symbol=symbol,
-                shares=shares_f,
-                cost_basis=cost_f,
-                avg_cost=cost_f / shares_f if shares_f else float("nan"),
-                price=price,
-                value=shares_f * price,
-                ttm_dps=dps,
-                projected_income=projected,
-                yield_on_cost=projected / cost_f * 100 if cost_f else float("nan"),
-                current_yield=projected / (shares_f * price) * 100 if price else 0.0,
-                ttm_received=float(events.loc[ttm_mask, "amount"].sum()),
-                total_received=float(received.sum()),
-            )
+            {
+                "symbol": symbol,
+                "shares": shares_f,
+                "cost_basis": cost_f,
+                "avg_cost": cost_f / shares_f if shares_f else float("nan"),
+                "price": price,
+                "value": shares_f * price,
+                "ttm_dps": dps,
+                "projected_income": projected,
+                "yield_on_cost": projected / cost_f * 100 if cost_f else float("nan"),
+                "current_yield": projected / (shares_f * price) * 100 if price else 0.0,
+                "ttm_received": float(events.loc[ttm_mask, "amount"].sum()),
+                "total_received": float(received.sum()),
+            }
         )
     df = pd.DataFrame(rows, columns=SUMMARY_COLUMNS)
     return df.sort_values("projected_income", ascending=False).reset_index(drop=True)
@@ -213,7 +214,8 @@ def audit_dividends(
         else:
             last_held = held_dates[-1]
         try:
-            hist = get_history(symbol, held_dates[0], min(last_held, end, date.today()))
+            asof = min(last_held, end, date.today())  # noqa: DTZ011 - local calendar date is the intended "today"
+            hist = get_history(symbol, held_dates[0], asof)
         except ValueError:
             continue  # no market data; pricing already surfaces this
         if "Dividends" not in hist.columns:

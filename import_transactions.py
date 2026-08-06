@@ -3,7 +3,6 @@
 # --------------------------------------------------------------------------- #
 import csv
 import io
-
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
@@ -205,7 +204,7 @@ def normalize_row(bank, row):
     mapping = adapter.columns
 
     # parse date into date object
-    parsed_date = datetime.strptime(
+    parsed_date = datetime.strptime(  # noqa: DTZ007 - broker dates are naive; only the calendar date is kept
         row.get(mapping["date"]), adapter.date_format
     ).date()
 
@@ -244,7 +243,7 @@ def import_csv(folder_path) -> list[NormalizedRow]:
         all_rows.extend(reversed(rows))
 
     all_rows.sort(
-        key=lambda x: datetime.strptime(
+        key=lambda x: datetime.strptime(  # noqa: DTZ007 - broker dates are naive; only the calendar date is kept
             x.get(adapter.columns["date"]), adapter.date_format
         ).date()
     )

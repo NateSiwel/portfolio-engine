@@ -1,4 +1,5 @@
 stock_data/*
+factor_data/*
 csvs/*
 !README.md
 .vscode
