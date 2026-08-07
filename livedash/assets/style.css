@@ -159,6 +159,8 @@ html, body {
 .tkr-sym { font-size: 34px; font-weight: 600; line-height: 1.1;
   letter-spacing: 0.02em; }
 .tkr-sh { font-family: var(--mono); font-size: 15px; color: var(--dim); }
+.tkr-earn { font-family: var(--mono); font-size: 14px; color: var(--warn);
+  letter-spacing: 0.02em; margin-top: 2px; }
 .c-spark { display: flex; align-items: center; }
 .c-price { text-align: right; font-family: var(--mono); font-size: 28px; }
 .c-daypct { text-align: right; font-family: var(--mono);

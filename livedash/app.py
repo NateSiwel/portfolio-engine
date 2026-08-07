@@ -25,8 +25,9 @@ from datetime import date
 import plotly.graph_objects as go
 from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 
-from . import figures
+from . import earnings, figures
 from .config import Config
+from .earnings import EarningsStore
 from .market import is_market_open, now_et, session_label
 from .portfolio import Portfolio, ViewModel
 from .quotes import QuoteService, run_poller
@@ -143,18 +144,21 @@ def render_hero(vm: ViewModel, cfg: Config, blur: bool) -> html.Div:
     )
 
 
-def _position_row(p, cfg: Config, blur: bool) -> html.Div:
+def _position_row(p, cfg: Config, blur: bool, today: date) -> html.Div:
     color = cfg.color_for(p.day_pct if p.day_pct is not None else 0)
+    tkr_children = [
+        html.Div(p.ticker, className="tkr-sym"),
+        html.Div(f"{p.shares:g} sh", className="tkr-sh"),
+    ]
+    # A same-day/this-week earnings date is the "why is this mover moving"
+    # signal — surfaced once daily, never re-checked intraday.
+    earn_label = earnings.tag(p.earnings_date, today)
+    if earn_label:
+        tkr_children.append(html.Div(earn_label, className="tkr-earn"))
     return html.Div(
         className="pos-row",
         children=[
-            html.Div(
-                [
-                    html.Div(p.ticker, className="tkr-sym"),
-                    html.Div(f"{p.shares:g} sh", className="tkr-sh"),
-                ],
-                className="c-tkr",
-            ),
+            html.Div(tkr_children, className="c-tkr"),
             html.Div(
                 sparkline(
                     p.intraday,
@@ -217,7 +221,8 @@ def render_positions(vm: ViewModel, cfg: Config, blur: bool) -> list:
             html.Div("WEIGHT", className="c-weight"),
         ],
     )
-    rows = [_position_row(p, cfg, blur) for p in vm.positions]
+    today = now_et().date()
+    rows = [_position_row(p, cfg, blur, today) for p in vm.positions]
     if vm.cash > 0:
         rows.append(
             html.Div(
@@ -301,8 +306,20 @@ def create_app(cfg: Config | None = None) -> tuple[Dash, Portfolio]:
     service.refresh_blocking()  # first paint has live data
     store = SnapshotStore(cfg.snapshot_db)
 
+    # Next-earnings-date per holding — a once-daily lookup, not part of the
+    # quote tape, so it's fetched synchronously here (first paint has it) and
+    # then only re-checked on a day rollover by the background thread below.
+    earnings_store = EarningsStore(cfg.snapshot_db)
+    earnings.refresh_stale(pf.tickers, earnings_store)
+    pf.earnings = earnings_store.get_all()
+
     stop = threading.Event()
     threading.Thread(target=run_poller, args=(service, cfg, stop), daemon=True).start()
+    threading.Thread(
+        target=earnings.run_earnings_refresher,
+        args=(pf, earnings_store, stop),
+        daemon=True,
+    ).start()
 
     blur0 = cfg.start_blurred
     vm0 = pf.build_view_model(service.snapshot, cfg.stale_after_secs)

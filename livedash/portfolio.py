@@ -45,6 +45,7 @@ class Position:
     intraday: list[float] = field(default_factory=list)
     estimated: bool = False  # price inferred from a proxy ETF
     shape_from_proxy: bool = False  # intraday curve borrowed from a proxy ETF
+    earnings_date: date | None = None  # next known earnings date, if any
 
 
 @dataclass
@@ -78,6 +79,8 @@ class Portfolio:
     history_dates: list[date] = field(default_factory=list)
     history_values: list[float] = field(default_factory=list)
     twr: dict[str, tuple] = field(default_factory=dict)  # bench -> (dates,port,bench)
+    # ticker -> next known earnings date; refreshed once daily, never polled.
+    earnings: dict[str, date] = field(default_factory=dict)
 
     @property
     def tickers(self) -> list[str]:
@@ -179,6 +182,7 @@ class Portfolio:
                     intraday=list(q.intraday) if q else [],
                     estimated=bool(q.estimated) if q else False,
                     shape_from_proxy=bool(q.shape_from_proxy) if q else False,
+                    earnings_date=self.earnings.get(ticker),
                 )
             )
 
