@@ -383,7 +383,8 @@ def create_app(cfg: Config | None = None) -> tuple[Dash, Portfolio]:
         update_title=None,
         suppress_callback_exceptions=True,
     )
-    app.index_string = _INDEX
+    rotate_ms = max(cfg.rotate_secs, 1) * 1000
+    app.index_string = _INDEX.replace("__ROTATE_MS__", str(rotate_ms))
     app._livedash_stop = stop  # keep a handle so it isn't GC'd
 
     app.layout = html.Div(
@@ -394,7 +395,7 @@ def create_app(cfg: Config | None = None) -> tuple[Dash, Portfolio]:
             dcc.Interval(id="fig-tick", interval=max(cfg.refresh_open_secs, 5) * 1000),
             dcc.Interval(
                 id="rotate",
-                interval=max(cfg.rotate_secs, 1) * 1000,
+                interval=rotate_ms,
                 disabled=cfg.rotate_secs == 0,
             ),
             dcc.Store(id="view-index", data=0),
@@ -709,6 +710,34 @@ _INDEX = """<!DOCTYPE html>
         var age = (Date.now() - window.__livedashBeat) / 1000;
         el.style.display = age > 30 ? "block" : "none";
       }, 5000);
+    })();
+
+    /* Restart the rotation countdown whenever someone touches the screen.
+       Auto-rotation exists for an unattended panel; if you've just tapped a tab
+       you want the full dwell time on it, not whatever fraction of the cycle
+       happened to be left. dcc.Interval only rebuilds its timer when the
+       `interval` prop actually *changes*, so alternate between N and N+1 ms —
+       invisible in practice, but enough for React to see a new value. */
+    (function () {
+      var BASE = __ROTATE_MS__;
+      var flip = false;
+      var last = 0;
+      function restart() {
+        var dc = window.dash_clientside;
+        if (!dc || !dc.set_props) return;
+        /* Throttle: a scroll fires touchmove continuously and every prop write
+           costs a render pass over the whole tree, which a Pi feels. Skipping
+           is safe — a reset within the last second already left the countdown
+           full — and it keeps a burst of events from batching into a no-op. */
+        var now = Date.now();
+        if (now - last < 1000) return;
+        last = now;
+        flip = !flip;
+        dc.set_props("rotate", {interval: flip ? BASE + 1 : BASE});
+      }
+      ["pointerdown", "keydown", "wheel", "touchmove"].forEach(function (ev) {
+        document.addEventListener(ev, restart, {capture: true, passive: true});
+      });
     })();
   </script>
 </body>

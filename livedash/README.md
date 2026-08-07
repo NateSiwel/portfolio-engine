@@ -36,7 +36,8 @@ proxy's shape rescaled onto the fund and pinned to whatever price is current, so
 it's drawn faint whether or not the NAV has landed.
 
 Views **auto-rotate** (default every 30s) so an unattended screen cycles through
-all of them; tap any tab to jump, and use the controls to **pause** rotation
+all of them; tap any tab to jump — any touch restarts the countdown, so a view
+you just picked gets its full dwell — and use the controls to **pause** rotation
 (⏸) or **blur** dollar amounts (👁, percentages stay visible) for a screen that
 lives in a shared room.
 
