@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8471"],
       "port": 8471
+    },
+    {
+      "name": "livedash",
+      "runtimeExecutable": "C:\\Users\\natha\\miniconda3\\envs\\financetracking\\python.exe",
+      "runtimeArgs": ["-m", "livedash"],
+      "port": 8050
     }
   ]
 }

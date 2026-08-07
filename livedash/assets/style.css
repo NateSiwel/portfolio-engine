@@ -1,0 +1,227 @@
+/* Kiosk styling for the always-on portfolio panel.
+   Tuned for a 1920x1200 10" panel viewed across a room: big glanceable type,
+   60px+ touch targets, tabular numerals so prices don't jitter as digits tick.
+   Colors mirror livedash/config.py.
+
+   Aesthetic: institutional terminal. Sharp corners, hairline rules, uppercase
+   micro-labels with wide tracking, monospaced figures, one restrained amber
+   accent. Nothing rounded, nothing glossy. */
+
+:root {
+  --bg: #0a0c10;
+  --panel: #10141b;
+  --panel-alt: #161c25;
+  --border: #1f2630;
+  --border-strong: #2b3340;
+  --text: #e4e9ef;
+  --dim: #77808d;
+  --up: #1fa588;
+  --down: #e05252;
+  --accent: #b8892f;
+  --warn: #c48a2d;
+  --sans: "IBM Plex Sans", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  cursor: none;               /* no mouse pointer on a touch kiosk */
+  user-select: none;
+}
+
+#root { display: flex; flex-direction: column; height: 100vh; }
+
+/* ---- top bar --------------------------------------------------------- */
+.topbar {
+  display: flex;
+  align-items: stretch;
+  gap: 22px;
+  padding: 0 30px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  flex: 0 0 auto;
+  min-height: 78px;
+}
+.clock {
+  min-width: 280px; line-height: 1.15;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.clock-time {
+  font-family: var(--mono);
+  font-size: 28px; font-weight: 500; letter-spacing: 0.02em;
+}
+.clock-sub {
+  font-size: 14px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+
+.viewbtns { display: flex; gap: 4px; flex: 1 1 auto; justify-content: center; }
+.viewbtn {
+  min-height: 62px; padding: 8px 26px;
+  background: transparent; color: var(--dim);
+  border: none; border-bottom: 2px solid transparent;
+  font-family: var(--sans);
+  font-size: 17px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.viewbtn:active { color: var(--text); }
+.viewbtn.active { color: var(--text); border-bottom-color: var(--accent); }
+
+.controls { display: flex; gap: 10px; align-items: center; }
+.iconbtn {
+  min-width: 74px; height: 46px; padding: 0 18px;
+  background: transparent; color: var(--dim);
+  border: 1px solid var(--border-strong); border-radius: 0; cursor: pointer;
+  font-family: var(--sans);
+  font-size: 13px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.14em;
+}
+.iconbtn:active { color: var(--text); border-color: var(--dim); }
+
+/* ---- screen ---------------------------------------------------------- */
+.screen {
+  flex: 1 1 auto; display: flex; flex-direction: column;
+  padding: 26px 38px 28px; min-height: 0; gap: 18px;
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+.screen.stale { opacity: 0.32; filter: grayscale(0.75); }
+
+/* ---- hero ------------------------------------------------------------ */
+.hero {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  flex: 0 0 auto;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.hero-label {
+  font-size: 14px; color: var(--dim); font-weight: 500;
+  letter-spacing: 0.3em; text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.hero-total {
+  font-family: var(--mono);
+  font-size: 76px; font-weight: 500; line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+.hero-right { text-align: right; }
+.hero-arrow { font-size: 46px; vertical-align: 0.12em; margin-right: 14px; }
+.hero-change { font-family: var(--mono); font-size: 84px; font-weight: 500; }
+.hero-pct { font-family: var(--mono); font-size: 40px; font-weight: 500; }
+.hero-suffix {
+  font-size: 18px; color: var(--dim);
+  text-transform: uppercase; letter-spacing: 0.12em; margin-left: 8px;
+}
+.hero-bench { font-size: 19px; color: var(--dim); margin-top: 6px; }
+
+/* ---- stage: all views stacked, one visible; switching is a crossfade --- */
+.stage { position: relative; flex: 1 1 auto; min-height: 0; display: grid; }
+.panel {
+  grid-area: 1 / 1;               /* every view occupies the same cell */
+  min-height: 0; min-width: 0;
+  display: flex; flex-direction: column; gap: 8px;
+  opacity: 0; pointer-events: none; z-index: 0;
+  transition: opacity 0.28s ease;
+}
+.panel.active { opacity: 1; pointer-events: auto; z-index: 1; }
+
+/* ---- positions table ------------------------------------------------- */
+.positions { flex: 1 1 auto; display: flex; flex-direction: column;
+  overflow: hidden; min-height: 0; }
+.pos-rows { flex: 1 1 auto; display: flex; flex-direction: column;
+  justify-content: space-evenly; min-height: 0; }
+.pos-row {
+  display: grid;
+  grid-template-columns: 1.7fr 200px 1fr 1fr 1.15fr 1.35fr 1fr;
+  align-items: center; gap: 18px;
+  padding: 6px 6px; border-bottom: 1px solid var(--border);
+}
+.pos-head { border-bottom: 1px solid var(--border-strong); padding-bottom: 8px;
+  flex: 0 0 auto; }
+.pos-head > div {
+  font-size: 13px; color: var(--dim); font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase;
+}
+.pos-head .c-price, .pos-head .c-daypct, .pos-head .c-daychg,
+.pos-head .c-value { text-align: right; }
+
+.c-tkr { display: flex; flex-direction: column; }
+.tkr-sym { font-size: 34px; font-weight: 600; line-height: 1.1;
+  letter-spacing: 0.02em; }
+.tkr-sh { font-family: var(--mono); font-size: 15px; color: var(--dim); }
+.c-spark { display: flex; align-items: center; }
+.c-price { text-align: right; font-family: var(--mono); font-size: 28px; }
+.c-daypct { text-align: right; font-family: var(--mono);
+  font-size: 28px; font-weight: 500; }
+.c-daychg { text-align: right; font-family: var(--mono); font-size: 25px; }
+.c-value { text-align: right; font-family: var(--mono);
+  font-size: 31px; font-weight: 500; }
+.c-weight { padding-left: 10px; }
+
+.wbar { height: 4px; background: var(--panel-alt); }
+.wbar-fill { height: 100%; background: var(--accent); }
+
+.pos-cash .tkr-sym { color: var(--dim); }
+
+/* ---- graph views ----------------------------------------------------- */
+.view-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 18px; flex: 0 0 auto;
+}
+.view-title {
+  font-size: 15px; color: var(--dim); font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  flex: 0 0 auto;
+}
+
+/* Time-window selector: a hairline segmented control, mono like the figures. */
+.winbtns { display: flex; }
+.winbtn {
+  min-width: 64px; height: 44px; padding: 0 14px;
+  background: transparent; color: var(--dim);
+  border: 1px solid var(--border-strong); border-radius: 0; cursor: pointer;
+  font-family: var(--mono);
+  font-size: 14px; font-weight: 500;
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+.winbtn + .winbtn { border-left: none; }
+.winbtn:active { color: var(--text); }
+.winbtn.active {
+  color: var(--text); background: var(--panel-alt);
+  border-bottom: 2px solid var(--accent);
+}
+.view-graph { flex: 1 1 auto; min-height: 0; }
+.view-graph .js-plotly-plot, .view-graph .plot-container { height: 100% !important; }
+
+/* ---- stale banner ---------------------------------------------------- */
+.stale-banner { display: none; }
+.stale-banner.show {
+  display: block; flex: 0 0 auto;
+  background: #2a1113; color: var(--down);
+  border-bottom: 1px solid var(--down);
+  font-size: 24px; font-weight: 600; text-align: center;
+  padding: 14px; letter-spacing: 0.06em; text-transform: uppercase;
+}
+
+.spark-empty { opacity: 0.3; }
+
+/* ---- dead-server watchdog banner (raised by the index-page script) ---- */
+#client-stale {
+  display: none;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 999;
+  background: #2a1113; color: var(--down);
+  border-bottom: 1px solid var(--down);
+  font-family: var(--sans);
+  font-size: 24px; font-weight: 600; text-align: center;
+  padding: 14px; letter-spacing: 0.06em; text-transform: uppercase;
+}
