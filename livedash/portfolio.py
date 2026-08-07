@@ -62,6 +62,9 @@ class ViewModel:
     age_secs: float | None
     stale: bool
     ok: bool
+    # Every displayed price is this session's final one — no estimate, nothing
+    # left to fetch. What makes the numbers safe to write down permanently.
+    settled: bool
 
 
 # --------------------------------------------------------------------------- #
@@ -217,6 +220,7 @@ class Portfolio:
             age_secs=age,
             stale=stale,
             ok=snap.ok,
+            settled=snap.settled,
         )
 
     # ----------------------------------------------------------------------- #

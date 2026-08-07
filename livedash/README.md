@@ -96,7 +96,7 @@ After=network-online.target
 [Service]
 WorkingDirectory=/home/pi/finance_sim
 ExecStart=/home/pi/miniconda3/envs/financetracking/bin/python -m livedash
-Environment=LIVEDASH_HOST=0.0.0.0
+Environment=LIVEDASH_HOST=127.0.0.1
 Restart=always
 RestartSec=5
 
@@ -106,6 +106,13 @@ WantedBy=default.target
 
 `systemctl --user enable --now livedash` (and `loginctl enable-linger pi` so it
 starts without a login).
+
+Loopback is deliberate: the kiosk browser is on the Pi itself, and the server
+has no authentication of any kind. Setting `LIVEDASH_HOST=0.0.0.0` to reach the
+panel from your phone hands your balances and holdings to anything else on the
+network (and to the internet, if the Pi is ever port-forwarded) — do it only
+behind something that authenticates, e.g. a reverse proxy or a WireGuard/
+Tailscale interface.
 
 **2. Chromium in kiosk mode**, pointed at the local server, launched from your
 desktop autostart:

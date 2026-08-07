@@ -189,6 +189,15 @@ def fetch_quotes(
         threads=True,
     )
 
+    # A dead feed empties the frames rather than raising, and every ticker would
+    # then get a priceless Quote — which the view model papers over with cached
+    # closes while `ok=True` holds the stale banner down, i.e. exactly the
+    # confident frozen numbers this module exists to avoid. Only a total blank
+    # counts: a fund with no 5m tape, or a pre-market fetch, legitimately empties
+    # one frame, never both.
+    if (intraday is None or intraday.empty) and (daily is None or daily.empty):
+        raise RuntimeError("Yahoo returned no data for any ticker")
+
     quotes: dict[str, Quote] = {}
     today = now_et().date()  # session date, not the host's local date
     for t in fetch_list:

@@ -675,6 +675,12 @@ def _maybe_snapshot(vm: ViewModel, store: SnapshotStore) -> None:
     as_of = vm.as_of
     if as_of is None or as_of.date() != today or not close_has_printed(as_of):
         return
+    # Nor is the fetch timestamp alone: a mutual fund is still riding its proxy
+    # estimate until its NAV posts, an hour or more after the print. Writing at
+    # 16:30 would freeze that estimate in as the day's actual value, and the
+    # once-a-day guard above would then suppress the real number when it lands.
+    if not vm.settled:
+        return
     if vm.total_value <= 0:
         return
     store.record(today, vm.total_value)
