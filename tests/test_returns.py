@@ -9,7 +9,7 @@ from datetime import date
 
 import pytest
 
-from import_transactions import import_csv
+from brokerimport import import_csv
 from investment_holdings_calc import (
     audit_splits,
     compare_to_market,

@@ -10,6 +10,7 @@ from decimal import Decimal
 
 import pytest
 
+from brokerimport import import_csv
 from dividend_tracker import (
     audit_dividends,
     cost_basis_by_ticker,
@@ -19,7 +20,6 @@ from dividend_tracker import (
     income_by_ticker,
     ttm_dividends_per_share,
 )
-from import_transactions import import_csv
 from investment_holdings_calc import get_investment_holdings_calendar
 
 ASOF = date(2024, 12, 31)

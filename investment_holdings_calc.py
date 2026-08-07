@@ -6,7 +6,7 @@ from typing import cast
 
 import pandas as pd
 
-from import_transactions import NormalizedRow, import_csv
+from brokerimport import NormalizedRow, import_csv
 from stock_data_cache import get_history, get_price
 
 CASH_SYMBOLS = {"SPAXX", "FDRXX", "SWVXX", "SWVYX", "SWVZX"}

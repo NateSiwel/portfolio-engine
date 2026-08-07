@@ -6,7 +6,7 @@ from decimal import Decimal
 
 import pytest
 
-from import_transactions import ActionType, import_csv
+from brokerimport import ActionType, import_csv
 from investment_holdings_calc import (
     get_investment_holdings_calendar,
     holdings_on_date,
