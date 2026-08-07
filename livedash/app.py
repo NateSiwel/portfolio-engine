@@ -28,7 +28,7 @@ from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 from . import earnings, figures
 from .config import Config
 from .earnings import EarningsStore
-from .market import is_market_open, now_et, session_label
+from .market import close_has_printed, is_market_open, now_et, session_label
 from .portfolio import Portfolio, ViewModel
 from .quotes import QuoteService, run_poller
 from .sparkline import sparkline
@@ -175,7 +175,7 @@ def _position_row(p, cfg: Config, blur: bool, today: date) -> html.Div:
             # until NAV posts); the flag clears once the real NAV lands. The
             # curve stays proxy-shaped (drawn faint) even after that.
             html.Div(
-                ("≈ " if p.estimated else "") + money(p.price, False, cents=True),
+                ("≈ " if p.estimated else "") + money(p.price, blur, cents=True),
                 className="c-price",
             ),
             html.Div(
@@ -188,9 +188,13 @@ def _position_row(p, cfg: Config, blur: bool, today: date) -> html.Div:
                 style={"color": color},
             ),
             html.Div(
-                money(p.day_change or 0, blur, signed=True),
+                money(p.day_change, blur, signed=True)
+                if p.day_change is not None
+                # No prior close to measure against — "+$0" would read as a flat
+                # day rather than as the unknown it is.
+                else "—",
                 className="c-daychg",
-                style={"color": color},
+                style={"color": color if p.day_change is not None else cfg.text_dim},
             ),
             html.Div(money(p.value, blur), className="c-value"),
             html.Div(
@@ -662,8 +666,14 @@ def _maybe_snapshot(vm: ViewModel, store: SnapshotStore) -> None:
         return
     if is_market_open():
         return  # wait for the close so the value is settled
-    if now_et().hour < 16:
-        return  # before the close (pre-market) — not an end-of-day figure
+    # Being past the bell isn't enough: the official closing auction print lands
+    # a few minutes later, and what's on screen is only settled if the quotes
+    # behind it were fetched after that. Anything earlier — a provisional 16:00
+    # price, or pre-market showing last night's numbers — would be written into
+    # the permanent record as today's close.
+    as_of = vm.as_of
+    if as_of is None or as_of.date() != today or not close_has_printed(as_of):
+        return
     if vm.total_value <= 0:
         return
     store.record(today, vm.total_value)

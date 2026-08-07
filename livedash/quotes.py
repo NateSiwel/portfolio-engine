@@ -219,14 +219,16 @@ def fetch_quotes(
         if last is None:
             last = spark[-1] if spark else (closes[-1][1] if closes else None)
         # Today's row carries the live consolidated price during the session
-        # and the official print afterwards, so it's only *final* once the
-        # session is over — see `close_has_printed` at the poller.
+        # and the official print afterwards, so its mere existence isn't
+        # finality: the number keeps moving until the closing auction prints.
+        # Claiming otherwise would let the poller go to sleep for the night on
+        # a provisional price and never fetch the real close.
         quotes[t] = Quote(
             ticker=t,
             last=last,
             prev_close=prev_close,
             intraday=spark,
-            settled=has_today,
+            settled=has_today and close_has_printed(),
         )
 
     # Funds have no tape of their own, so the proxy ETF supplies the intraday

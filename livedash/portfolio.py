@@ -21,6 +21,7 @@ from investment_holdings_calc import (
 )
 from stock_data_cache import get_price
 
+from .market import now_et
 from .quotes import QuoteSnapshot
 
 CASH = "CASH"
@@ -111,7 +112,7 @@ class Portfolio:
         # Seed a fallback price per ticker from the cache (last settled close) so
         # the screen has real values before the first live fetch lands, and a
         # safety net for any ticker Yahoo returns nothing for intraday.
-        today = date.today()
+        today = now_et().date()  # session date, not the host's local date
         for t in self.current_shares:
             try:
                 self.fallback_price[t] = float(get_price(t, today))

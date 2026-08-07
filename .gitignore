@@ -8,3 +8,4 @@ portfolio_dashboard.html
 CLAUDE.md
 factor_data/*
 livedash_snapshots.db
+.claude/launch.json
