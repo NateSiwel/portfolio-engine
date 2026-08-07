@@ -51,7 +51,11 @@ class EarningsStore:
                 "INSERT INTO earnings_date (ticker, next_date, checked_day) "
                 "VALUES (?, ?, ?) ON CONFLICT(ticker) DO UPDATE SET "
                 "next_date=excluded.next_date, checked_day=excluded.checked_day",
-                (ticker, next_date.isoformat() if next_date else None, today.isoformat()),
+                (
+                    ticker,
+                    next_date.isoformat() if next_date else None,
+                    today.isoformat(),
+                ),
             )
 
 
@@ -104,7 +108,9 @@ def tag(d: date | None, today: date | None = None) -> str | None:
     return "ER today" if delta == 0 else f"ER {d.strftime('%a')}"
 
 
-def refresh_stale(tickers: list[str], store: EarningsStore, today: date | None = None) -> None:
+def refresh_stale(
+    tickers: list[str], store: EarningsStore, today: date | None = None
+) -> None:
     """Fetch and cache next-earnings-date for any ticker not yet checked today."""
     today = today or date.today()
     for t in tickers:

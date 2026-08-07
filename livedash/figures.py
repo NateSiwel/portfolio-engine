@@ -11,7 +11,6 @@ from datetime import date, timedelta
 
 import plotly.graph_objects as go
 
-from . import earnings
 from .config import Config
 from .portfolio import Portfolio, ViewModel
 
