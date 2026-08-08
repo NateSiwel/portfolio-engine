@@ -55,7 +55,14 @@ silence, clearing itself when the server comes back.
 
 ## Running it
 
-From the repo root, in the project's conda env:
+From the repo root, in the project's conda env, install the runtime
+dependencies once:
+
+```bash
+pip install -r livedash/requirements.txt
+```
+
+Then start the server:
 
 ```bash
 python -m livedash
