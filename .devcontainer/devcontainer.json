@@ -29,7 +29,7 @@
 	// Use 'postCreateCommand' to run commands after the container is created.
 	// "postCreateCommand": "python --version",
 	"postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.claude",
-	"postAttachCommand": "git config --global user.name 'repo-bot' && git config --global user.email '1234+repo-bot@users.noreply.github.com' && gh auth setup-git",
+	"postAttachCommand": "git config --global user.name 'repo-bot' && git config --global user.email '118133334+repo-bot@users.noreply.github.com' && gh auth setup-git",
 
 	// Configure tool-specific properties.
 	// "customizations": {},
