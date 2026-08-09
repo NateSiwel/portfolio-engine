@@ -1,0 +1,41 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/anaconda
+{
+	"name": "Anaconda (Python 3)",
+	"build": { 
+		"context": "..",
+		"dockerfile": "Dockerfile"
+	},
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	"features": {
+		"ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
+  		"ghcr.io/devcontainers/features/github-cli:1": {}
+	},
+
+	"mounts": [
+		"source=claude-code-config,target=/home/vscode/.claude,type=volume",
+		"source=gh-config,target=/home/vscode/.config/gh,type=volume"
+	],
+	"containerEnv": {
+		"CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
+		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+		"DISABLE_AUTOUPDATER": "1"
+	},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+
+	// Use 'postCreateCommand' to run commands after the container is created.
+	// "postCreateCommand": "python --version",
+	"postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.claude /home/vscode/.config/gh",
+	"postAttachCommand": "git config --global user.name 'repo-bot' && git config --global user.email '118133334+repo-bot@users.noreply.github.com' && (gh auth status >/dev/null 2>&1 && gh auth setup-git || true)",
+
+	// Configure tool-specific properties.
+	// "customizations": {},
+
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "root"
+
+	"remoteEnv": { "SSH_AUTH_SOCK": "" }
+}
