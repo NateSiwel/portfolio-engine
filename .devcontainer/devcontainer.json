@@ -14,13 +14,13 @@
 	},
 
 	"mounts": [
-		"source=claude-code-config,target=/home/vscode/.claude,type=volume"
+		"source=claude-code-config,target=/home/vscode/.claude,type=volume",
+		"source=gh-config,target=/home/vscode/.config/gh,type=volume"
 	],
 	"containerEnv": {
 		"CLAUDE_CONFIG_DIR": "/home/vscode/.claude",
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-		"DISABLE_AUTOUPDATER": "1",
-		"GH_TOKEN": "${localEnv:DEVCONTAINER_GH_TOKEN}"
+		"DISABLE_AUTOUPDATER": "1"
 	},
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
@@ -28,7 +28,7 @@
 
 	// Use 'postCreateCommand' to run commands after the container is created.
 	// "postCreateCommand": "python --version",
-	"postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.claude",
+	"postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.claude /home/vscode/.config/gh",
 	"postAttachCommand": "git config --global user.name 'repo-bot' && git config --global user.email '118133334+repo-bot@users.noreply.github.com' && gh auth setup-git",
 
 	// Configure tool-specific properties.
