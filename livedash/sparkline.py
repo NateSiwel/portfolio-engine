@@ -34,14 +34,23 @@ def _svg_markup(
     span = hi - lo or 1.0
     pad = 3.0
     usable_h = height - 2 * pad
+    # The endpoint dot sits at the last x — without horizontal room to match,
+    # its right half falls outside the viewBox and gets clipped.
+    r = stroke + 0.5
+    pad_x = r + 0.5
+    usable_w = width - 2 * pad_x
 
     def y(v: float) -> float:
         # SVG y grows downward; invert so higher price sits higher.
         return pad + (hi - v) / span * usable_h
 
     n = len(values)
-    step = width / (n - 1)
-    coords = " ".join(f"{i * step:.1f},{y(v):.1f}" for i, v in enumerate(values))
+    step = usable_w / (n - 1)
+
+    def x(i: int) -> float:
+        return pad_x + i * step
+
+    coords = " ".join(f"{x(i):.1f},{y(v):.1f}" for i, v in enumerate(values))
     color = up if values[-1] >= base else down
     baseline_y = y(base)
     # A borrowed shape is drawn faint: the endpoint is a real price, but the
@@ -55,8 +64,8 @@ def _svg_markup(
         f'<polyline points="{coords}" fill="none" stroke="{color}" '
         f'stroke-opacity="{line_op}" '
         f'stroke-width="{stroke}" stroke-linejoin="round" stroke-linecap="round"/>'
-        f'<circle cx="{(n - 1) * step:.1f}" cy="{y(values[-1]):.1f}" '
-        f'r="{stroke + 0.5:.1f}" fill="{color}"/>'
+        f'<circle cx="{x(n - 1):.1f}" cy="{y(values[-1]):.1f}" '
+        f'r="{r:.1f}" fill="{color}"/>'
         f"</svg>"
     )
 

@@ -28,7 +28,13 @@ from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 from . import earnings, figures
 from .config import Config
 from .earnings import EarningsStore
-from .market import close_has_printed, is_market_open, now_et, session_label
+from .market import (
+    close_has_printed,
+    is_market_open,
+    last_session_date,
+    now_et,
+    session_label,
+)
 from .portfolio import Portfolio, ViewModel
 from .quotes import QuoteService, run_poller
 from .sparkline import sparkline
@@ -662,7 +668,12 @@ _last_snapshot_day: date | None = None
 
 def _maybe_snapshot(vm: ViewModel, store: SnapshotStore) -> None:
     global _last_snapshot_day
-    today = now_et().date()
+    # Session date, not the wall-clock date: if settlement drags past
+    # midnight (a slow fund NAV), `as_of` ends up stamped with the new
+    # calendar date even though it's still pricing the session that just
+    # closed. Keying the record on the wall-clock date would mislabel that
+    # close under the wrong day.
+    today = last_session_date()
     if _last_snapshot_day == today:
         return
     if is_market_open():
@@ -673,7 +684,11 @@ def _maybe_snapshot(vm: ViewModel, store: SnapshotStore) -> None:
     # price, or pre-market showing last night's numbers — would be written into
     # the permanent record as today's close.
     as_of = vm.as_of
-    if as_of is None or as_of.date() != today or not close_has_printed(as_of):
+    if (
+        as_of is None
+        or last_session_date(as_of) != today
+        or not close_has_printed(as_of)
+    ):
         return
     # Nor is the fetch timestamp alone: a mutual fund is still riding its proxy
     # estimate until its NAV posts, an hour or more after the print. Writing at
