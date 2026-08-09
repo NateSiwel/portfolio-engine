@@ -10,4 +10,4 @@ RUN if [ -f "/tmp/conda-tmp/environment.yml" ]; then umask 0002 && /opt/conda/bi
 # RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 #     && apt-get -y install --no-install-recommends <your-package-list-here>
 
-RUN pip install pandas yfinance pytest statsmodels
+RUN python -m pip install --no-cache-dir pandas yfinance pytest statsmodels
