@@ -19,9 +19,9 @@ from .market import (
     MARKET_TZ,
     close_has_printed,
     is_market_open,
+    last_session_date,
     market_phase,
     nav_may_have_posted,
-    now_et,
     secs_until_next_open,
 )
 
@@ -199,7 +199,7 @@ def fetch_quotes(
         raise RuntimeError("Yahoo returned no data for any ticker")
 
     quotes: dict[str, Quote] = {}
-    today = now_et().date()  # session date, not the host's local date
+    today = last_session_date()  # last/current session, not the wall-clock date
     for t in fetch_list:
         intra = _extract(intraday, t, "Close")
         day = _extract(daily, t, "Close")
@@ -246,7 +246,7 @@ def fetch_quotes(
     # real NAV lands — first on the quote endpoint, later in daily history.
     for t, proxy in proxies.items():
         q, p = quotes.get(t), quotes.get(proxy)
-        if q is None or not q.prev_close or q.intraday:
+        if q is None or not q.prev_close or len(q.intraday) >= 2:
             continue  # unknown, unpriceable, or it has a real tape
 
         if not q.settled:

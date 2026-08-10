@@ -7,7 +7,7 @@ keeps rare. Everything is computed in market time so it's correct regardless of
 where the Pi's clock is set.
 """
 
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 MARKET_TZ = ZoneInfo("America/New_York")
@@ -53,8 +53,19 @@ def is_market_open(now: datetime | None = None) -> bool:
 
 
 def close_has_printed(now: datetime | None = None) -> bool:
-    """Past the point where the official closing auction print has landed."""
-    return _clock(now or now_et()) >= _SETTLE
+    """Past the point where the official closing auction print has landed.
+
+    A pure time-of-day check breaks once the clock has crossed midnight since
+    the referenced session closed — 00:20 reads as "before 16:30" even though
+    that print landed eight hours earlier. Detect the rollover by comparing
+    against the referenced session's own date: once we're no longer on that
+    date (the pre-open window for the *next* session), the close is long done
+    regardless of the current time-of-day.
+    """
+    now = now or now_et()
+    if now.date() != last_session_date(now):
+        return True
+    return _clock(now) >= _SETTLE
 
 
 def secs_until_next_open(now: datetime | None = None, lead: float = 60.0) -> float:
@@ -77,6 +88,25 @@ def secs_until_next_open(now: datetime | None = None, lead: float = 60.0) -> flo
     return max(delta.total_seconds() - lead, 0.0)
 
 
+def last_session_date(now: datetime | None = None) -> date:
+    """Calendar date of the most recent (or current) regular session.
+
+    Before the open this is the prior trading day, not the wall-clock date —
+    at 00:15 the calendar has already flipped to a new day, but the session
+    that matters (the one whose close hasn't been fully processed yet) is
+    still yesterday's. Callers that key "today's" data off the wall clock
+    instead of this would treat that still-recent close as absent the moment
+    midnight passes.
+    """
+    now = now or now_et()
+    d = now.date()
+    if _clock(now) < _OPEN:
+        d -= timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
 def nav_may_have_posted(now: datetime | None = None) -> bool:
     """Could a mutual fund's NAV for the most recent session be published yet?
 
@@ -86,6 +116,11 @@ def nav_may_have_posted(now: datetime | None = None) -> bool:
     """
     now = now or now_et()
     if now.weekday() >= 5:
+        return True
+    # Same midnight rollover as close_has_printed(): once the clock has left the
+    # referenced session's date, its evening NAV window is long past, so a pure
+    # `>= 17:00` time-of-day check would wrongly suppress the lookup at 00:20.
+    if now.date() != last_session_date(now):
         return True
     return now.timetz().replace(tzinfo=None) >= _NAV_POST
 
