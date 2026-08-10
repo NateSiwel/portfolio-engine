@@ -6,7 +6,6 @@ market time (ET) to match how the module reasons about the trading day.
 """
 
 from datetime import datetime
-
 from zoneinfo import ZoneInfo
 
 from livedash.market import (
