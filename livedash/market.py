@@ -117,6 +117,11 @@ def nav_may_have_posted(now: datetime | None = None) -> bool:
     now = now or now_et()
     if now.weekday() >= 5:
         return True
+    # Same midnight rollover as close_has_printed(): once the clock has left the
+    # referenced session's date, its evening NAV window is long past, so a pure
+    # `>= 17:00` time-of-day check would wrongly suppress the lookup at 00:20.
+    if now.date() != last_session_date(now):
+        return True
     return now.timetz().replace(tzinfo=None) >= _NAV_POST
 
 

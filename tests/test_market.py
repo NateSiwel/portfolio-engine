@@ -13,6 +13,7 @@ from livedash.market import (
     is_market_open,
     last_session_date,
     market_phase,
+    nav_may_have_posted,
 )
 
 ET = ZoneInfo("America/New_York")
@@ -71,6 +72,22 @@ class TestCloseHasPrinted:
 
     def test_saturday_after_friday_close_is_true(self):
         assert close_has_printed(et(*SAT, 0, 20)) is True
+
+
+class TestNavMayHavePosted:
+    def test_during_session_is_false(self):
+        assert nav_may_have_posted(et(*MON, 12, 0)) is False
+
+    def test_after_nav_post_is_true(self):
+        assert nav_may_have_posted(et(*MON, 17, 0)) is True
+
+    def test_after_midnight_is_true(self):
+        # Monday's NAV posted Monday evening; at 00:20 Tuesday it's available
+        # even though 00:20 < 17:00 as a time-of-day.
+        assert nav_may_have_posted(et(*TUE, 0, 20)) is True
+
+    def test_weekend_is_true(self):
+        assert nav_may_have_posted(et(*SAT, 12, 0)) is True
 
 
 class TestPhaseSanity:
