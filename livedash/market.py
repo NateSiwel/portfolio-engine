@@ -7,7 +7,7 @@ keeps rare. Everything is computed in market time so it's correct regardless of
 where the Pi's clock is set.
 """
 
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 MARKET_TZ = ZoneInfo("America/New_York")
@@ -88,7 +88,7 @@ def secs_until_next_open(now: datetime | None = None, lead: float = 60.0) -> flo
     return max(delta.total_seconds() - lead, 0.0)
 
 
-def last_session_date(now: datetime | None = None):
+def last_session_date(now: datetime | None = None) -> date:
     """Calendar date of the most recent (or current) regular session.
 
     Before the open this is the prior trading day, not the wall-clock date —
