@@ -16,8 +16,8 @@ broker CSVs                                                       output
 brokerimport/          bank-agnostic adapters → NormalizedRow ledger
     │
     ▼
-investment_holdings_   holdings calendar, dense daily valuation,
-calc.py                time-weighted return, split audit
+investment_holdings_calc.py  holdings calendar, dense daily valuation,
+                        time-weighted return, split audit
     │                                              │
     ├── dividend_tracker.py   income, yield-on-cost, forward projection
     ├── factor_analysis.py    Fama-French + momentum regression
